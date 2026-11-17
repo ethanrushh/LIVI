@@ -135,7 +135,6 @@ struct Telemetry {
     snap: Snapshot,
     appearance: AppearanceMode,
     dark: bool,
-    volume: Option<f64>,
 }
 
 impl Telemetry {
@@ -147,7 +146,6 @@ impl Telemetry {
             snap: Snapshot::new(),
             appearance: cfg.appearance_mode,
             dark: cfg.dark_mode,
-            volume: None,
         };
         t.seed(&cfg, saved);
         t
@@ -167,7 +165,6 @@ impl Telemetry {
         if cfg.hu_volume.is_finite() {
             let level = cfg.hu_volume.clamp(0.0, 1.0);
             patch.insert("volume".into(), level.into());
-            self.volume = Some(level);
         }
         let mut climate = livi_cp::vehicle_state::default_climate();
         let source = match &saved.climate {
@@ -298,18 +295,29 @@ impl Telemetry {
         }
     }
 
+    async fn volume(&mut self, raw: f64) {
+        if !raw.is_finite() {
+            return;
+        }
+        let level = raw.clamp(0.0, 1.0);
+        if self.snap.get("volume").and_then(Value::as_f64) == Some(level) {
+            return;
+        }
+        // Config is the master-volume authority, including changes made through
+        // the control socket or by the system mixer. Publish to telemetry so the
+        // CarPlay vehicle-state subscriptions and other clients hear them too.
+        merge(&mut self.snap, &json!({ "volume": level }));
+        self.publish().await;
+    }
+
     async fn volume_from(&mut self, raw: f64) {
         if !raw.is_finite() {
             return;
         }
         let level = raw.clamp(0.0, 1.0);
-        if self
-            .volume
-            .is_some_and(|last| (level - last).abs() < VOLUME_STEP)
-        {
+        if (level - self.core.hub.config().hu_volume).abs() < VOLUME_STEP {
             return;
         }
-        self.volume = Some(level);
         println!(
             "[volume] head unit set to {} % from telemetry",
             (level * 100.0).round()
@@ -396,8 +404,8 @@ async fn listen() -> Option<TcpListener> {
     None
 }
 
-pub async fn run(core: Arc<Core>, mut inside: mpsc::UnboundedReceiver<Value>, saved: Saved) {
-    let (app, io, mut pushed) = socket(core.hub.watch());
+pub async fn run(core: Arc<Core>, inside: mpsc::UnboundedReceiver<Value>, saved: Saved) {
+    let (app, io, pushed) = socket(core.hub.watch());
     tokio::spawn(async move {
         let Some(listener) = listen().await else {
             return;
@@ -407,9 +415,19 @@ pub async fn run(core: Arc<Core>, mut inside: mpsc::UnboundedReceiver<Value>, sa
             eprintln!("[telemetry] server stopped: {e}");
         }
     });
+    follow(core, io, inside, pushed, saved).await;
+}
+
+async fn follow(
+    core: Arc<Core>,
+    io: SocketIo,
+    mut inside: mpsc::UnboundedReceiver<Value>,
+    mut pushed: mpsc::UnboundedReceiver<Value>,
+    saved: Saved,
+) {
+    let mut state = core.hub.watch();
     let mut t = Telemetry::new(core.clone(), io, &saved);
     t.publish().await;
-    let mut state = core.hub.watch();
     loop {
         tokio::select! {
             Some(patch) = pushed.recv() => t.push(&patch).await,
@@ -418,12 +436,13 @@ pub async fn run(core: Arc<Core>, mut inside: mpsc::UnboundedReceiver<Value>, sa
                 if changed.is_err() {
                     return;
                 }
-                let (mode, dark) = {
+                let (mode, dark, volume) = {
                     let cfg = &state.borrow_and_update().config;
-                    (cfg.appearance_mode, cfg.dark_mode)
+                    (cfg.appearance_mode, cfg.dark_mode, cfg.hu_volume)
                 };
                 t.appearance(mode).await;
                 t.dark_mode(dark).await;
+                t.volume(volume).await;
             }
         }
     }
@@ -621,6 +640,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn external_config_volume_reaches_telemetry_and_phone_writes_do_not_echo() {
+        let dir = TempDir::new();
+        let mut cfg = defaults();
+        cfg.hu_volume = 0.15;
+        cfg.audio_volume = 0.95;
+        let core = core(&dir, cfg.clone());
+        let mut state = core.hub.watch();
+        let (_, io, pushed) = socket(core.hub.watch());
+        let (inside, incoming) = mpsc::unbounded_channel();
+        let worker = tokio::spawn(follow(core.clone(), io, incoming, pushed, Saved::default()));
+        async fn seen(state: &mut watch::Receiver<State>, level: f64) {
+            tokio::time::timeout(
+                Duration::from_secs(2),
+                state.wait_for(|s| {
+                    s.config.hu_volume == level
+                        && s.telemetry.get("volume").and_then(Value::as_f64) == Some(level)
+                }),
+            )
+            .await
+            .expect("master-volume synchronization timed out")
+            .unwrap();
+        }
+        seen(&mut state, 0.15).await;
+
+        // The .NET control-socket action and the system-mixer observer both use
+        // Core::set_config, rather than sending a telemetry patch.
+        core.set_config(&json!({ "huVolume": 0.12 })).await.unwrap();
+        seen(&mut state, 0.12).await;
+
+        // CarPlay's control still writes back to config through telemetry.
+        inside.send(json!({ "volume": 0.09 })).unwrap();
+        seen(&mut state, 0.09).await;
+        core.set_config(&json!({ "huVolume": 0.06 })).await.unwrap();
+        seen(&mut state, 0.06).await;
+        inside.send(json!({ "volume": 0.09 })).unwrap();
+        seen(&mut state, 0.09).await;
+
+        let current = core.hub.config();
+        assert_eq!(current.audio_volume, cfg.audio_volume);
+        assert_eq!(current.nav_volume, cfg.nav_volume);
+        assert_eq!(current.call_volume, cfg.call_volume);
+        assert_eq!(current.voice_assistant_volume, cfg.voice_assistant_volume);
+        state.borrow_and_update();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(30), state.changed())
+                .await
+                .is_err(),
+            "synchronization must settle without a feedback loop"
+        );
+        worker.abort();
+        let _ = worker.await;
+    }
+
+    #[tokio::test]
     async fn a_new_path_opens_its_page_once() {
         let dir = TempDir::new();
         let core = core(&dir, defaults());
@@ -810,7 +883,7 @@ mod tests {
         let keys: Vec<&str> = t.snap.keys().map(String::as_str).collect();
         assert_eq!(keys, ["climate", "ts"]);
         t.volume_from(f64::INFINITY).await;
-        assert_eq!(t.volume, None);
+        assert!(!t.snap.contains_key("volume"));
     }
 
     async fn poll(addr: SocketAddr, method: &str, sid: &str, body: &str) -> String {

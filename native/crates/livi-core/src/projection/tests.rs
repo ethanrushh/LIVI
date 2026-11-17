@@ -1339,6 +1339,32 @@ async fn the_phone_hands_the_screen_back() {
 }
 
 #[tokio::test]
+async fn master_volume_telemetry_updates_carplay_without_changing_stream_gains() {
+    let mut rig = Rig::new();
+    let config = rig.p.config_seen.clone();
+    let telemetry = json!({ "volume": 0.12 }).as_object().cloned().unwrap();
+    rig.p.on_state(config.clone(), telemetry);
+    assert_eq!(
+        rig.drain(),
+        [CpCmd::Gauges(
+            json!({ "volume": 0.12 }).as_object().cloned().unwrap()
+        )]
+    );
+
+    rig.p.on_event(CpEvent::Spawned { id: 1 });
+    let commands = rig.drain();
+    assert!(commands.contains(&CpCmd::Gauges(
+        json!({ "volume": 0.12 }).as_object().cloned().unwrap()
+    )));
+    assert!(commands.contains(&stream_volumes(
+        config.audio_volume,
+        config.nav_volume,
+        config.call_volume,
+        config.voice_assistant_volume,
+    )));
+}
+
+#[tokio::test]
 async fn only_the_config_sets_the_night_modes() {
     let mut rig = Rig::new();
     let cfg = rig.p.config_seen.clone();

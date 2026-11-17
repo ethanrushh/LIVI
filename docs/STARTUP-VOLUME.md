@@ -54,6 +54,14 @@ requires a ceiling enforced before audio reaches the DAC, including while LIVI i
 these changes or their automated tests as proof of end-to-end hearing protection on a particular
 DAC/amplifier chain.
 
+## CarPlay Ultra master volume
+
+Changes to `huVolume` through the control socket, including the CarPi .NET service's steering-wheel
+buttons, are reflected in telemetry `volume` and CarPlay Ultra's master-volume control. System mixer
+changes also follow this path when **Link Head Unit to System Volume** is enabled. CarPlay changes
+continue to update the head unit in the other direction. The separate music, navigation, call and
+voice-assistant stream gains retain their own settings.
+
 ## Additional Media Buffer
 
 Settings → Audio → **Additional Media Buffer** adds 0–2,000 ms of playback headroom in 50 ms steps.
