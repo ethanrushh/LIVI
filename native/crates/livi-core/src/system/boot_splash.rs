@@ -140,6 +140,9 @@ pub fn start(core: Arc<Core>, privileged: Privileged) -> Watcher {
                 applied = None;
             } else if applied.as_ref() != Some(&icon) && attempted.as_ref() != Some(&icon) {
                 attempted = Some(icon.clone());
+                // A failed rebuild can leave changed theme files behind. Forget
+                // the old success so choosing that icon again also repairs them.
+                applied = None;
                 publish(
                     &core,
                     Some(BootSplash {
