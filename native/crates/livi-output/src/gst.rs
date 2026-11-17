@@ -130,6 +130,7 @@ impl Outside for Gst {
             clock_rate: cfg.clock_rate,
             channels: cfg.channels,
             latency_ms: cfg.latency_ms,
+            media_buffer_ms: cfg.media_buffer_ms,
             realtime: cfg.realtime,
             device: cfg.device.clone(),
             label: format!("{:?}", cfg.codec),

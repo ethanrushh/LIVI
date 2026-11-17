@@ -708,6 +708,19 @@ mod tests {
     }
 
     #[test]
+    fn media_buffer_control_stores_integer_milliseconds_with_bounds() {
+        let settings = Settings::new(schema());
+        let stack = settings.find(&["audio", "mediaBufferMs"]).unwrap();
+        let state = json!({ "config": { "mediaBufferMs": 0 } });
+        for (asked, expected) in [(-50.0, 0), (300.0, 300), (2500.0, 2000)] {
+            let Some(Change::Config(patch)) = settings.number(&stack, asked, &state) else {
+                panic!("buffer has a numeric control");
+            };
+            assert_eq!(patch["mediaBufferMs"].as_u64(), Some(expected));
+        }
+    }
+
+    #[test]
     fn a_hex_colour_is_taken_with_or_without_the_hash() {
         let s = Settings::new(schema());
         let Some(stack) = s.find(&["appearance", "ui-colors", "highlightColorLight"]) else {

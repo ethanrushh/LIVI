@@ -59,6 +59,9 @@ impl ConfigFile {
         }
 
         let mut config = merge(&current_names(&file), &defaults);
+        if config.media_buffer_ms > 2000 {
+            config.media_buffer_ms = defaults.media_buffer_ms;
+        }
         if !config.startup_volume_limit.is_finite()
             || !(0.0..=1.0).contains(&config.startup_volume_limit)
         {
@@ -269,6 +272,9 @@ pub fn apply_patch(current: &Config, patch: &Value) -> Result<Config, String> {
         }
     }
     let next: Config = serde_json::from_value(value).map_err(|e| format!("rejected: {e}"))?;
+    if next.media_buffer_ms > 2000 {
+        return Err("mediaBufferMs needs a value from 0 to 2000".into());
+    }
     if !next.startup_volume_limit.is_finite() || !(0.0..=1.0).contains(&next.startup_volume_limit) {
         return Err("startupVolumeLimit needs a value from 0 to 1".into());
     }
@@ -521,6 +527,27 @@ pub mod tests {
             let config = apply_patch(&defaults(), &json!({ "startupVolumeLimit": value })).unwrap();
             file.save(&config).unwrap();
             assert_eq!(file.load(&HostFacts::default()).startup_volume_limit, value);
+        }
+    }
+
+    #[test]
+    fn media_buffer_is_persisted_and_validated() {
+        let dir = TempDir::new();
+        let file = file_in(&dir);
+        assert_eq!(file.load(&HostFacts::default()).media_buffer_ms, 0);
+        for value in [0, 300, 2000] {
+            let next = apply_patch(&defaults(), &json!({ "mediaBufferMs": value })).unwrap();
+            file.save(&next).unwrap();
+            assert_eq!(file.load(&HostFacts::default()).media_buffer_ms, value);
+        }
+        for value in [json!(-1), json!(2001), json!(1.5), json!("300")] {
+            assert!(apply_patch(&defaults(), &json!({ "mediaBufferMs": value })).is_err());
+            fs::write(
+                dir.0.join("LIVI/config.json"),
+                json!({ "mediaBufferMs": value }).to_string(),
+            )
+            .unwrap();
+            assert_eq!(file.load(&HostFacts::default()).media_buffer_ms, 0);
         }
     }
 

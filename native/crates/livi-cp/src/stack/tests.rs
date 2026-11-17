@@ -18,6 +18,7 @@ use livi_crypto::{
 
 pub(crate) struct FakeMedia {
     calls: Mutex<Vec<String>>,
+    audio_buffers: Mutex<Vec<u32>>,
     pub(crate) started: broadcast::Sender<(u32, u32)>,
     pub(crate) video_status: Mutex<Option<crate::media::VideoStatus>>,
     pub(crate) output_delay: Mutex<Option<u32>>,
@@ -27,6 +28,7 @@ impl FakeMedia {
     pub(crate) fn new() -> Arc<Self> {
         Arc::new(Self {
             calls: Mutex::default(),
+            audio_buffers: Mutex::default(),
             started: broadcast::channel(8).0,
             video_status: Mutex::default(),
             output_delay: Mutex::default(),
@@ -62,6 +64,7 @@ impl Media for FakeMedia {
         _key: [u8; 32],
         req: AudioRequest,
     ) -> impl Future<Output = AudioStream> + Send {
+        self.audio_buffers.lock().unwrap().push(req.media_buffer_ms);
         self.log(format!(
             "open_audio {:?} {} {} {} {} {}",
             req.codec, req.clock_rate, req.channels, req.latency_ms, req.realtime, req.device
@@ -247,6 +250,10 @@ impl Rig {
     }
 
     async fn with_capture(capture: bool) -> Self {
+        Self::with_options(capture, 0).await
+    }
+
+    async fn with_options(capture: bool, media_buffer_ms: u32) -> Self {
         let dir = TempDir::new();
         let identity = load_or_create(&dir.0.join("identity.json"));
         let pairings = Pairings::new(dir.0.join("pairings.json"));
@@ -260,6 +267,7 @@ impl Rig {
             info,
             audio_device: "out".into(),
             audio_input_device: "in".into(),
+            media_buffer_ms,
             vehicle_climate: true,
             app_version: "9.5.0".into(),
             app_build_date: String::new(),
@@ -336,6 +344,36 @@ fn the_feedback_names_the_sample_the_speaker_plays_now() {
         47_999,
         "RTP time wraps"
     );
+}
+
+#[tokio::test]
+async fn extra_buffer_is_requested_for_carplay_media_only() {
+    let mut rig = Rig::with_options(false, 350).await;
+    let secret = rig.secret;
+    rig.phone.verify(&secret, b"phone-1").await;
+    rig.phone
+        .plist("SETUP", "/s", &dict([("timingPort", Value::Int(9))]))
+        .await;
+    for (i, audio_type) in ["media", "telephony", "speechRecognition", ""]
+        .iter()
+        .enumerate()
+    {
+        let stream = dict([
+            ("type", Value::Int(100)),
+            ("streamConnectionID", Value::Int(i as u64 + 1)),
+            ("audioType", Value::String((*audio_type).into())),
+            ("audioFormat", Value::Int(0x10)),
+            ("audioLatencyMs", Value::Int(100)),
+        ]);
+        rig.phone
+            .plist(
+                "SETUP",
+                "/s",
+                &dict([("streams", Value::Array(vec![stream]))]),
+            )
+            .await;
+    }
+    assert_eq!(*rig.media.audio_buffers.lock().unwrap(), [350, 0, 0, 0]);
 }
 
 #[test]

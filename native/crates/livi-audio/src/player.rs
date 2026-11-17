@@ -23,10 +23,25 @@ pub struct Config {
     pub clock_rate: u32,
     pub channels: u8,
     pub latency_ms: u32,
+    pub media_buffer_ms: u32,
     pub realtime: bool,
     pub device: Option<String>,
     pub label: String,
     pub codec_data: Vec<u8>,
+}
+
+impl Config {
+    fn media_buffer_ms(&self) -> u32 {
+        if self.realtime {
+            0
+        } else {
+            self.media_buffer_ms.min(2000)
+        }
+    }
+
+    fn buffered_pcm(&self) -> bool {
+        matches!(self.codec, Codec::Pcm | Codec::PcmLe) && self.media_buffer_ms() > 0
+    }
 }
 
 fn decoder_chain(codec: Codec) -> Option<&'static str> {
@@ -75,7 +90,14 @@ pub fn pipeline_desc(cfg: &Config) -> String {
             format!(
                 "{} ! ",
                 chain
-                    .replace("{latency}", &cfg.latency_ms.max(100).to_string())
+                    .replace(
+                        "{latency}",
+                        &(cfg
+                            .latency_ms
+                            .max(100)
+                            .saturating_add(cfg.media_buffer_ms()))
+                        .to_string()
+                    )
                     .replace("{rate}", &cfg.clock_rate.to_string())
             )
         }
@@ -86,7 +108,7 @@ pub fn pipeline_desc(cfg: &Config) -> String {
          {head}audioconvert ! clocksync sync=true ! volume name=vol ! \
          audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=48000,channels=2 ! \
          queue name=out ! {sink}",
-        stamp = cfg.codec != Codec::AacRaw,
+        stamp = cfg.codec != Codec::AacRaw && !cfg.buffered_pcm(),
         sink = sink_chain(cfg),
     )
 }
@@ -94,6 +116,22 @@ pub fn pipeline_desc(cfg: &Config) -> String {
 struct UnitClock {
     next: Option<gst::ClockTime>,
     frame: gst::ClockTime,
+}
+
+impl UnitClock {
+    fn schedule(
+        &mut self,
+        now: gst::ClockTime,
+        headroom: gst::ClockTime,
+        duration: gst::ClockTime,
+    ) -> gst::ClockTime {
+        let pts = match self.next {
+            Some(next) if next >= now => next,
+            _ => now + headroom,
+        };
+        self.next = Some(pts + duration);
+        pts
+    }
 }
 
 const UNIT_HEADROOM: gst::ClockTime = gst::ClockTime::from_mseconds(250);
@@ -127,14 +165,19 @@ pub struct Player {
     codec: Codec,
     payload_type: u8,
     units: Mutex<UnitClock>,
+    pcm_format: Option<(u32, u8)>,
+    media_buffer: gst::ClockTime,
 }
 
 impl Player {
     pub fn new(cfg: &Config) -> Option<Self> {
+        Self::from_desc(cfg, &pipeline_desc(cfg))
+    }
+
+    fn from_desc(cfg: &Config, desc: &str) -> Option<Self> {
         ensure_init();
 
-        let desc = pipeline_desc(cfg);
-        let pipeline = match gst::parse::launch(&desc) {
+        let pipeline = match gst::parse::launch(desc) {
             Ok(p) => p.downcast::<gst::Pipeline>().ok()?,
             Err(e) => {
                 eprintln!("[cp_audio:{}] pipeline failed: {e}", cfg.label);
@@ -242,6 +285,8 @@ impl Player {
             visualizer,
             codec: cfg.codec,
             payload_type: cfg.payload_type,
+            pcm_format: cfg.buffered_pcm().then_some((cfg.clock_rate, cfg.channels)),
+            media_buffer: gst::ClockTime::from_mseconds(u64::from(cfg.media_buffer_ms())),
             units: Mutex::new(UnitClock {
                 next: None,
                 frame: unit_duration(&cfg.codec_data),
@@ -284,14 +329,16 @@ impl Player {
                 rtp[RTP_HEADER_LEN.min(rtp.len())..].to_vec()
             }
         };
-        self.appsrc
-            .push_buffer(gst::Buffer::from_slice(packet))
-            .is_ok()
+        self.push_buffer(gst::Buffer::from_slice(packet))
     }
 
     pub fn push_samples(&self, samples: &[u8]) -> bool {
-        let mut buffer = gst::Buffer::from_slice(samples.to_vec());
-        if self.codec == Codec::AacRaw
+        self.push_buffer(gst::Buffer::from_slice(samples.to_vec()))
+    }
+
+    fn push_buffer(&self, mut buffer: gst::Buffer) -> bool {
+        let bytes = buffer.size() as u64;
+        if (self.codec == Codec::AacRaw || self.pcm_format.is_some())
             && let Ok(mut clock) = self.units.lock()
             && let Some(b) = buffer.get_mut()
         {
@@ -299,13 +346,20 @@ impl Player {
                 .pipeline
                 .current_running_time()
                 .unwrap_or(gst::ClockTime::ZERO);
-            let pts = match clock.next {
-                Some(next) if next >= now => next,
-                _ => now + UNIT_HEADROOM,
+            let (duration, headroom) = match self.pcm_format {
+                Some((rate, channels)) if rate > 0 && channels > 0 => (
+                    gst::ClockTime::from_nseconds(
+                        bytes / (2 * u64::from(channels)) * 1_000_000_000 / u64::from(rate),
+                    ),
+                    self.media_buffer,
+                ),
+                _ => (clock.frame, UNIT_HEADROOM),
             };
+            // Schedule PCM by sample count, rather than arrival time: a short
+            // network stall must consume headroom instead of becoming an audible gap.
+            let pts = clock.schedule(now, headroom, duration);
             b.set_pts(pts);
-            b.set_duration(clock.frame);
-            clock.next = Some(pts + clock.frame);
+            b.set_duration(duration);
         }
         self.appsrc.push_buffer(buffer).is_ok()
     }
@@ -384,6 +438,7 @@ mod tests {
             clock_rate: 44100,
             channels: 2,
             latency_ms: 1000,
+            media_buffer_ms: 0,
             realtime,
             device: None,
             label: "music".into(),
@@ -517,5 +572,83 @@ mod tests {
         );
         assert_eq!(unit_duration(&[0x11, 0x94]).mseconds(), 20);
         assert_eq!(unit_duration(&[]).mseconds(), 40);
+    }
+
+    #[test]
+    fn media_jitter_buffer_adds_headroom_but_voice_keeps_its_existing_latency() {
+        for codec in [Codec::AacLc, Codec::AacEld, Codec::Opus] {
+            let mut config = cfg(codec, false);
+            config.media_buffer_ms = 350;
+            assert!(pipeline_desc(&config).contains("rtpjitterbuffer latency=1350"));
+            config.realtime = true;
+            assert!(pipeline_desc(&config).contains("rtpjitterbuffer latency=1000"));
+        }
+        let mut config = cfg(Codec::PcmLe, false);
+        config.media_buffer_ms = 2000;
+        assert!(config.buffered_pcm());
+        assert!(pipeline_desc(&config).contains("do-timestamp=false"));
+        config.realtime = true;
+        assert!(!config.buffered_pcm());
+        assert!(pipeline_desc(&config).contains("do-timestamp=true"));
+    }
+
+    #[test]
+    fn pcm_timeline_absorbs_a_stall_and_rebuffers_only_after_headroom_is_exhausted() {
+        let ms = gst::ClockTime::from_mseconds;
+        let mut clock = UnitClock {
+            next: None,
+            frame: ms(10),
+        };
+        assert_eq!(clock.schedule(ms(0), ms(300), ms(10)), ms(300));
+        assert_eq!(clock.schedule(ms(10), ms(300), ms(10)), ms(310));
+        // The packets arrive in a burst after a 200 ms stall, but play 10 ms apart.
+        assert_eq!(clock.schedule(ms(210), ms(300), ms(10)), ms(320));
+        assert_eq!(clock.schedule(ms(210), ms(300), ms(10)), ms(330));
+        assert_eq!(clock.schedule(ms(210), ms(300), ms(10)), ms(340));
+        // An outage beyond the reserve starts a fresh buffered timeline.
+        assert_eq!(clock.schedule(ms(1000), ms(300), ms(10)), ms(1300));
+        assert_eq!(clock.schedule(ms(1000), ms(300), ms(10)), ms(1310));
+    }
+
+    #[test]
+    fn pcm_samples_reach_a_fake_sink_with_contiguous_buffered_timestamps() {
+        // No hardware audio device: run the actual producer/decoder pipeline with
+        // clock waiting disabled so the timestamps can be checked deterministically.
+        for codec in [Codec::Pcm, Codec::PcmLe] {
+            let mut config = cfg(codec, false);
+            config.clock_rate = 48000;
+            config.media_buffer_ms = 500;
+            let desc = pipeline_desc(&config)
+                .replace(&sink_chain(&config), "fakesink name=audio-sink sync=false")
+                .replace("clocksync sync=true", "clocksync sync=false");
+            let player = Player::from_desc(&config, &desc).unwrap();
+            let (tx, rx) = std::sync::mpsc::channel();
+            player
+                .pipeline
+                .by_name(SINK_NAME)
+                .unwrap()
+                .static_pad("sink")
+                .unwrap()
+                .add_probe(gst::PadProbeType::BUFFER, move |_, info| {
+                    if let Some(buffer) = info.buffer() {
+                        let _ = tx.send((buffer.pts().unwrap(), buffer.duration().unwrap()));
+                    }
+                    gst::PadProbeReturn::Ok
+                });
+            player.start();
+            for _ in 0..2 {
+                if codec == Codec::Pcm {
+                    assert!(player.push_rtp(&[0; RTP_HEADER_LEN + 1920]));
+                } else {
+                    assert!(player.push_samples(&[0; 1920]));
+                }
+            }
+            let first = rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+            let second = rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+            assert!(first.0 >= gst::ClockTime::from_mseconds(500));
+            assert_eq!(first.1, gst::ClockTime::from_mseconds(10));
+            assert_eq!(second.0 - first.0, first.1);
+            assert_eq!(second.1, first.1);
+        }
     }
 }

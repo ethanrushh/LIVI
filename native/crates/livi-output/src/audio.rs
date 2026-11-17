@@ -18,6 +18,7 @@ impl<O: Outside> Host<O> {
             clock_rate: open.clock_rate,
             channels: open.channels,
             latency_ms: open.latency_ms,
+            media_buffer_ms: open.media_buffer_ms,
             realtime: open.realtime,
             device: Some(open.device).filter(|d| !d.is_empty()),
             key,

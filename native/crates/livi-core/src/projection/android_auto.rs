@@ -435,6 +435,11 @@ impl AaMedia for GstAaMedia {
             clock_rate: sample_rate,
             channels: channels.min(u32::from(u8::MAX)) as u8,
             latency_ms: 0,
+            media_buffer_ms: if kind == AudioKind::Media {
+                self.state.borrow().config.media_buffer_ms
+            } else {
+                0
+            },
             realtime: false,
             fed: true,
             device: self
@@ -721,6 +726,46 @@ mod tests {
         media.video_started(false, 1280, 720);
         assert_eq!(*crop.borrow(), crop_for((1280, 720), (1280, 600)));
         assert!(media.open_mic_tap("/tmp/mic", 16000, 1, "").is_some());
+    }
+
+    #[tokio::test]
+    async fn extra_buffer_reaches_android_auto_music_but_not_voice_or_calls() {
+        let dir = TempDir::new();
+        let sock = dir.0.join("gst.sock");
+        let gst = Output::new(sock.clone());
+        let ctrl = CompositorControl::connect(dir.0.join("ctrl"));
+        let plane = MainPlane::new(gst.clone(), ctrl.clone());
+        let clusters = ClusterPlanes::new(gst.clone(), ctrl);
+        let mut current = state();
+        current.config.media_buffer_ms = 500;
+        let (_tx, rx) = watch::channel(current);
+        let media = GstAaMedia::new(gst, plane, clusters, rx, dir.0.join("mic"));
+        media.prime_audio(AudioKind::Media, 48000, 2, "music");
+        let mut host = FakeHost::connect(&sock).await;
+        for (kind, expected) in [
+            (AudioKind::Media, 500),
+            (AudioKind::Speech, 0),
+            (AudioKind::Call, 0),
+            (AudioKind::Alert, 0),
+        ] {
+            if kind != AudioKind::Media {
+                media.prime_audio(kind, 48000, 2, "voice");
+            }
+            loop {
+                let (op, id, rest) = host.next().await;
+                if op != OP_AUDIO_OPEN {
+                    continue;
+                }
+                let (opts, _) = livi_output_proto::audio::parse_audio_open(&rest).unwrap();
+                assert_eq!(opts.media_buffer_ms, expected);
+                assert!(opts.fed);
+                host.stream
+                    .write_all(&encode_reply(REPLY_AUDIO_PORTS, id, &[0; 4]))
+                    .await
+                    .unwrap();
+                break;
+            }
+        }
     }
 
     #[tokio::test]

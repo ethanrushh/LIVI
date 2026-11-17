@@ -297,6 +297,7 @@ impl AirplayMedia for GstAirplay {
                 clock_rate: format.rate,
                 channels: 2,
                 latency_ms: 100,
+                media_buffer_ms: 0,
                 realtime: true,
                 fed: false,
                 device: String::new(),

@@ -209,14 +209,14 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle.kts', 'android/gradle.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Verify startup volume before packaging
+      - name: Verify audio changes before packaging
         if: matrix.os == 'linux' && env.BUILD_BRANCH == 'startup-volume'
         working-directory: native
         shell: bash
         run: |
           set -euo pipefail
           cargo fmt --all --check
-          cargo test -p livi-core -p livi-core-proto -p livi-ui-model --locked
+          cargo test -p livi-core -p livi-core-proto -p livi-ui-model -p livi-audio -p livi-cp -p livi-output -p livi-output-proto --locked
           bash ../scripts/install/test-update-config.sh
 
       - name: Build and package [linux]

@@ -1173,6 +1173,7 @@ mod tests {
                 info: crate::info::tests::sample(),
                 audio_device: String::new(),
                 audio_input_device: String::new(),
+                media_buffer_ms: 0,
                 vehicle_climate: true,
                 app_version: "9.5.0".into(),
                 app_build_date: String::new(),

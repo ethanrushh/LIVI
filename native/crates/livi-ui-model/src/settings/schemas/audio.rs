@@ -34,6 +34,13 @@ pub fn schema() -> Node {
                 .page(Label::plain("Startup Volume Limit"))
                 .disabled(Condition::NotLinux),
             volume("settings.music", "Music", "music", "audioVolume"),
+            Node::number(Label::plain("Additional Media Buffer"), "mediaBufferMs")
+                .icon("music")
+                .display_value()
+                .range(Some(0.0), Some(2000.0), Some(50.0))
+                .default_number(0.0)
+                .shown(Shown::Suffix(" ms"))
+                .page(Label::plain("Additional Media Buffer")),
             volume(
                 "settings.navigation",
                 "Navigation",

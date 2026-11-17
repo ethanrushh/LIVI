@@ -226,6 +226,11 @@ impl<M: Media> Conn<M> {
             .get("audioType")
             .map_or_else(|| "media".to_string(), text);
         let profile = audio_profile(&audio_type);
+        let media_buffer_ms = if profile.kind == AudioKind::Media {
+            self.ctx.config.borrow().media_buffer_ms.min(2000)
+        } else {
+            0
+        };
         let fmt = int(sd.get("audioFormat"));
         let is_aac = fmt & (AAC_LC_44K_STEREO | AAC_LC_48K_STEREO) != 0;
         let is_opus = fmt & OPUS_MONO != 0;
@@ -260,6 +265,7 @@ impl<M: Media> Conn<M> {
             clock_rate: if is_opus { 48000 } else { sample_rate },
             channels,
             latency_ms: if latency_ms > 0 { latency_ms } else { 1000 },
+            media_buffer_ms,
             realtime: profile.kind != AudioKind::Media,
             device,
         };
@@ -327,7 +333,7 @@ impl<M: Media> Conn<M> {
             host_stream: opened.id,
             mic: None,
             origin: None,
-            playout_latency_ms: latency_ms,
+            playout_latency_ms: latency_ms.saturating_add(media_buffer_ms),
             profile,
             mic_plan,
         });

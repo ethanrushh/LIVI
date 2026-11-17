@@ -115,6 +115,8 @@ pub struct Config {
     pub hu_volume_link_system: bool,
     #[serde(default = "default_startup_volume_limit")]
     pub startup_volume_limit: f64,
+    #[serde(default)]
+    pub media_buffer_ms: u32,
     pub audio_volume: f64,
     pub nav_volume: f64,
     pub voice_assistant_volume: f64,
@@ -629,6 +631,7 @@ pub fn defaults() -> Config {
         hu_volume: 0.95,
         hu_volume_link_system: true,
         startup_volume_limit: DEFAULT_STARTUP_VOLUME_LIMIT,
+        media_buffer_ms: 0,
         audio_volume: 0.95,
         nav_volume: 0.95,
         voice_assistant_volume: 0.95,

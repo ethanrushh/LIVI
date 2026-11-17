@@ -856,6 +856,7 @@ mod tests {
             clock_rate: 48000,
             channels: 1,
             latency_ms: 1000,
+            media_buffer_ms: 0,
             realtime: true,
             fed: false,
             device: "sink".into(),

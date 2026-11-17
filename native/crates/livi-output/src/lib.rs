@@ -52,6 +52,7 @@ pub struct AudioConfig {
     pub clock_rate: u32,
     pub channels: u8,
     pub latency_ms: u32,
+    pub media_buffer_ms: u32,
     pub realtime: bool,
     pub device: Option<String>,
     pub key: [u8; 32],

@@ -37,6 +37,7 @@ pub struct AudioOpts {
     pub clock_rate: u32,
     pub channels: u8,
     pub latency_ms: u32,
+    pub media_buffer_ms: u32,
     pub realtime: bool,
     pub fed: bool,
     pub device: String,
@@ -68,6 +69,7 @@ pub fn aac_raw_asc(key: &[u8; 32]) -> &[u8] {
 }
 
 const AUDIO_FIXED: usize = 12;
+const HAS_MEDIA_BUFFER: u8 = 4;
 const MIC_FIXED: usize = 17;
 
 pub fn encode_audio_open(key: &[u8; 32], o: &AudioOpts) -> Vec<u8> {
@@ -76,7 +78,18 @@ pub fn encode_audio_open(key: &[u8; 32], o: &AudioOpts) -> Vec<u8> {
     out.extend_from_slice(&o.clock_rate.to_le_bytes());
     out.push(o.channels);
     out.extend_from_slice(&o.latency_ms.to_le_bytes());
-    out.push(u8::from(o.realtime) | (u8::from(o.fed) << 1));
+    out.push(
+        u8::from(o.realtime)
+            | (u8::from(o.fed) << 1)
+            | if o.media_buffer_ms > 0 {
+                HAS_MEDIA_BUFFER
+            } else {
+                0
+            },
+    );
+    if o.media_buffer_ms > 0 {
+        out.extend_from_slice(&o.media_buffer_ms.to_le_bytes());
+    }
     out.extend_from_slice(key);
     out.extend_from_slice(o.device.as_bytes());
     out
@@ -84,6 +97,12 @@ pub fn encode_audio_open(key: &[u8; 32], o: &AudioOpts) -> Vec<u8> {
 
 pub fn parse_audio_open(rest: &[u8]) -> Option<(AudioOpts, [u8; 32])> {
     let (fixed, rest) = rest.split_first_chunk::<AUDIO_FIXED>()?;
+    let (media_buffer_ms, rest) = if fixed[11] & HAS_MEDIA_BUFFER != 0 {
+        let (buffer, rest) = rest.split_first_chunk::<4>()?;
+        (u32::from_le_bytes(*buffer), rest)
+    } else {
+        (0, rest)
+    };
     let (key, device) = rest.split_first_chunk::<32>()?;
     let opts = AudioOpts {
         codec: AudioCodec::from_wire(fixed[0])?,
@@ -91,6 +110,7 @@ pub fn parse_audio_open(rest: &[u8]) -> Option<(AudioOpts, [u8; 32])> {
         clock_rate: u32::from_le_bytes([fixed[2], fixed[3], fixed[4], fixed[5]]),
         channels: fixed[6],
         latency_ms: u32::from_le_bytes([fixed[7], fixed[8], fixed[9], fixed[10]]),
+        media_buffer_ms,
         realtime: fixed[11] & 1 != 0,
         fed: fixed[11] & 2 != 0,
         device: String::from_utf8(device.to_vec()).ok()?,
@@ -147,6 +167,7 @@ mod tests {
             clock_rate: 44_100,
             channels: 2,
             latency_ms: 120,
+            media_buffer_ms: 0,
             realtime: true,
             fed: true,
             device: "hw:1".into(),
@@ -175,6 +196,29 @@ mod tests {
     }
 
     #[test]
+    fn media_buffer_extension_preserves_key_device_and_old_messages() {
+        let mut opts = AudioOpts {
+            codec: AudioCodec::PcmLe,
+            payload_type: 0,
+            clock_rate: 48000,
+            channels: 2,
+            latency_ms: 0,
+            media_buffer_ms: 2000,
+            realtime: false,
+            fed: true,
+            device: "usb-dac".into(),
+        };
+        let key = [7; 32];
+        let wire = encode_audio_open(&key, &opts);
+        assert_eq!(parse_audio_open(&wire), Some((opts.clone(), key)));
+        assert!(parse_audio_open(&wire[..AUDIO_FIXED + 3]).is_none());
+        opts.media_buffer_ms = 0;
+        let old_wire = encode_audio_open(&key, &opts);
+        assert_eq!(old_wire.len(), AUDIO_FIXED + 32 + opts.device.len());
+        assert_eq!(parse_audio_open(&old_wire), Some((opts, key)));
+    }
+
+    #[test]
     fn short_or_unknown_input_is_refused() {
         let opts = AudioOpts {
             codec: AudioCodec::Opus,
@@ -182,6 +226,7 @@ mod tests {
             clock_rate: 48_000,
             channels: 2,
             latency_ms: 0,
+            media_buffer_ms: 0,
             realtime: false,
             fed: false,
             device: String::new(),

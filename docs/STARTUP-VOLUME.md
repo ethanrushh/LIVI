@@ -54,6 +54,26 @@ requires a ceiling enforced before audio reaches the DAC, including while LIVI i
 these changes or their automated tests as proof of end-to-end hearing protection on a particular
 DAC/amplifier chain.
 
+## Additional Media Buffer
+
+Settings → Audio → **Additional Media Buffer** adds 0–2,000 ms of playback headroom in 50 ms steps.
+The default is **0 ms**, preserving the existing behavior. Start with **300 ms** when testing brief
+wireless audio hitches, then try 500 ms if necessary. Restart LIVI after changing the setting;
+existing streams retain the value with which they were opened.
+
+The value is saved as `"mediaBufferMs": 300` in `config.json`. It applies to CarPlay and Android Auto
+music, on wired and wireless connections. CarPlay's compressed RTP audio gets additional jitter-buffer
+latency. PCM music, including Android Auto, gets a continuous sample timeline with the selected
+headroom, allowing short stalls followed by packet bursts to play continuously. CarPlay's timing
+feedback includes the additional delay.
+
+Calls, navigation prompts, voice assistants, microphone capture, radio and AirPlay keep their existing
+timing. This setting does not change volume or the startup volume limit. Invalid saved values fall
+back to 0; live values outside 0–2,000 ms are rejected.
+
+Additional buffering delays playback and responses to media controls. It can accommodate late delivery
+within the available reserve; it cannot recover permanently lost packets or cover an unlimited outage.
+
 ## Build the branch for a Raspberry Pi
 
 `nightly` is a rolling GitHub **release tag**, not a source branch. `startup-volume` starts at the

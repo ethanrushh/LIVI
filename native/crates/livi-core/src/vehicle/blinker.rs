@@ -174,6 +174,7 @@ async fn open(gst: &Output, device: &str) -> Option<Stream> {
         clock_rate: RATE,
         channels: CHANNELS,
         latency_ms: 0,
+        media_buffer_ms: 0,
         realtime: true,
         fed: true,
         device: device.to_string(),

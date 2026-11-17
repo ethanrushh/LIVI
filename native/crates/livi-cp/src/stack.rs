@@ -132,6 +132,7 @@ pub enum ScreenCodec {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StackConfig {
     pub info: InfoConfig,
+    pub media_buffer_ms: u32,
     pub audio_device: String,
     pub audio_input_device: String,
     pub vehicle_climate: bool,
