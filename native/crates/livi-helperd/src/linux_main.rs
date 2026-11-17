@@ -139,6 +139,21 @@ pub fn run_install_wifi_ap(unit: Option<String>, rule: Option<String>) -> ExitCo
     )
 }
 
+pub fn run_update_boot_splash(logo: Option<String>) -> ExitCode {
+    let Some(logo) = logo else {
+        eprintln!("[splash] usage: --update-boot-splash <PNG file>");
+        return ExitCode::FAILURE;
+    };
+    match livi_helper_stack::privileged::update_boot_splash(&logo) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(3),
+        Err(e) => {
+            eprintln!("[splash] {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 pub fn run_install_udev_rule(rule: Option<String>, filter: Option<String>) -> ExitCode {
     let Some(rule) = rule else {
         eprintln!("[udev] usage: --install-udev-rule <rule file> [<touch filter>]");

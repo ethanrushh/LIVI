@@ -662,9 +662,13 @@ livi_apply_splash() {
 
   echo "→ Installing the LIVI boot splash"
   dir="$LIVI_LIB_DIR/pi/splash"
-  if [ ! -f "$dir/install.sh" ] || [ ! -f "$dir/livi-splash.png" ]; then
+  if [ ! -f "$dir/install.sh" ] || [ ! -f "$dir/livi-splash.png" ] || [ ! -f "$dir/livi.script" ] || [ ! -f "$dir/livi.plymouth" ]; then
     dir="$(mktemp -d)"
-    curl -fsSL "$LIVI_RAW/scripts/install/pi/splash/install.sh" -o "$dir/install.sh"       && curl -fsSL "$LIVI_RAW/scripts/install/pi/splash/livi-splash.png" -o "$dir/livi-splash.png"       || { echo "   could not obtain the splash installer, skipping" >&2; return 0; }
+    local resource
+    for resource in install.sh livi-splash.png livi.script livi.plymouth; do
+      curl -fsSL "$LIVI_RAW/scripts/install/pi/splash/$resource" -o "$dir/$resource" \
+        || { echo "   could not obtain the splash installer resources, skipping" >&2; return 0; }
+    done
   fi
 
   script="$dir/install.sh"

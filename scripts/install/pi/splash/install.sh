@@ -16,9 +16,8 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-if [[ ! -f "${LOGO_SRC}" ]]; then
-  echo "Missing ${LOGO_SRC}" >&2
-  echo "Place a transparent-background PNG." >&2
+if [[ ! -f "${LOGO_SRC}" || ! -f "${SCRIPT_DIR}/livi.script" || ! -f "${SCRIPT_DIR}/livi.plymouth" ]]; then
+  echo "Missing LIVI splash resources (PNG, script or theme descriptor)." >&2
   exit 1
 fi
 
@@ -35,48 +34,14 @@ apt-get install -y plymouth plymouth-themes
 
 echo "[2/5] Writing theme to ${THEME_DIR}"
 install -d -m 0755 "${THEME_DIR}"
-install -m 0644 "${LOGO_SRC}" "${THEME_DIR}/logo.png"
+# Keep a chosen UI icon when the installer is rerun. LIVI synchronizes it again
+# when the app starts, including restoring the original icon after Reset.
+if [[ ! -f "${THEME_DIR}/logo.png" ]]; then
+  install -m 0644 "${LOGO_SRC}" "${THEME_DIR}/logo.png"
+fi
 
-cat > "${THEME_DIR}/${THEME_NAME}.plymouth" <<EOF
-[Plymouth Theme]
-Name=LIVI
-Description=LIVI boot splash
-ModuleName=script
-
-[script]
-ImageDir=${THEME_DIR}
-ScriptFile=${THEME_DIR}/${THEME_NAME}.script
-EOF
-
-cat > "${THEME_DIR}/${THEME_NAME}.script" <<'EOF'
-Window.SetBackgroundTopColor(0, 0, 0);
-Window.SetBackgroundBottomColor(0, 0, 0);
-
-logo = Image("logo.png");
-sprite = Sprite();
-scaled_for_h = 0;
-
-# Scale the logo to at most 75% of display height (keep aspect, no upscaling, fit width), then center.
-fun refresh() {
-  win_w = Window.GetWidth();
-  win_h = Window.GetHeight();
-  if (win_w > 0) {
-    if (win_h > 0) {
-      scale = win_h * 0.75 / logo.GetHeight();
-      if (scale > 1) scale = 1;
-      if (logo.GetWidth() * scale > win_w) scale = win_w / logo.GetWidth();
-      logo_w = logo.GetWidth() * scale;
-      logo_h = logo.GetHeight() * scale;
-      if (scaled_for_h != win_h) {
-        sprite.SetImage(logo.Scale(logo_w, logo_h));
-        scaled_for_h = win_h;
-      }
-      sprite.SetPosition(win_w / 2 - logo_w / 2, win_h / 2 - logo_h / 2, 10);
-    }
-  }
-}
-Plymouth.SetRefreshFunction(refresh);
-EOF
+install -m 0644 "${SCRIPT_DIR}/livi.plymouth" "${THEME_DIR}/${THEME_NAME}.plymouth"
+install -m 0644 "${SCRIPT_DIR}/livi.script" "${THEME_DIR}/${THEME_NAME}.script"
 
 echo "[3/5] Activating theme + rebuilding initramfs"
 plymouth-set-default-theme "${THEME_NAME}" -R

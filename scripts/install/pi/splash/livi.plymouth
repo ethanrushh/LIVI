@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=LIVI
+Description=LIVI boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/livi
+ScriptFile=/usr/share/plymouth/themes/livi/livi.script

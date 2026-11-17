@@ -192,6 +192,8 @@ pub async fn run(
             helper_named: user_data.join("driver/livi-helperd"),
             user_data: user_data.clone(),
         });
+    #[cfg(target_os = "linux")]
+    let mut splash_sync = None;
     if let Some(privileged) = privileged {
         if system::udev_rule::ensure(&privileged).await {
             return Ok(Exit::Restart(None));
@@ -200,6 +202,10 @@ pub async fn run(
             return Ok(Exit::Quit);
         }
         tokio::spawn(system::gvfs_guard::start(privileged.clone()));
+        #[cfg(target_os = "linux")]
+        {
+            splash_sync = Some(system::boot_splash::start(core.clone(), privileged.clone()));
+        }
         if cfg!(target_os = "linux") && system::wifi_ap::wanted(&core.hub.config()) {
             core.ap_ready().send_replace(false);
         }
@@ -231,6 +237,10 @@ pub async fn run(
         _ = server::serve(core.clone(), listener) => {}
         _ = stop => {}
         _ = quit.notified() => println!("[core] stopping"),
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(splash) = splash_sync {
+        splash.stop().await;
     }
     let _ = tokio::time::timeout(Duration::from_secs(2), system::gvfs_guard::stop()).await;
     goodbye(&core).await;

@@ -18,6 +18,8 @@ pub enum PrivilegedError {
     NotInstalled(&'static str),
     #[error("own binary: {0}")]
     OwnBinary(io::Error),
+    #[error("{0}")]
+    BootSplash(String),
 }
 
 fn at(path: impl std::fmt::Display) -> impl FnOnce(io::Error) -> PrivilegedError {
@@ -34,6 +36,12 @@ fn require_root() -> Result<(), PrivilegedError> {
     } else {
         Err(PrivilegedError::NeedsRoot)
     }
+}
+
+#[cfg(target_os = "linux")]
+pub fn update_boot_splash(src: &str) -> Result<bool, PrivilegedError> {
+    require_root()?;
+    crate::boot_splash::update(src).map_err(PrivilegedError::BootSplash)
 }
 
 fn read(src: &str) -> Result<Vec<u8>, PrivilegedError> {

@@ -255,6 +255,8 @@ pub enum DeviceStatus {
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct System {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boot_splash: Option<BootSplash>,
     pub wifi_interfaces: Vec<String>,
     pub bt_adapters: Vec<String>,
     pub interface_models: BTreeMap<String, String>,
@@ -269,6 +271,13 @@ pub struct System {
     pub audio_sources: Vec<AudioDevice>,
     pub start_page: String,
     pub fonts: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BootSplash {
+    pub updating: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]

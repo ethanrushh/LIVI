@@ -217,7 +217,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo fmt --all --check
-          cargo test -p livi-core -p livi-core-proto -p livi-ui-model -p livi-audio -p livi-cp -p livi-output -p livi-output-proto --locked
+          cargo test -p livi-core -p livi-core-proto -p livi-ui-model -p livi-audio -p livi-cp -p livi-output -p livi-output-proto -p livi-helper-stack -p livi-helperd --locked
           bash ../scripts/install/test-update-config.sh
 
       - name: Build and package [linux]

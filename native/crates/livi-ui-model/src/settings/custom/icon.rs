@@ -22,7 +22,7 @@ pub fn shown(state: &Value) -> String {
 }
 
 pub fn rows(state: &Value, t: &Strings) -> Vec<Row> {
-    vec![
+    let mut rows = vec![
         Row {
             kind: RowKind::Button,
             label: t.t("settings.importPng", "Import PNG"),
@@ -48,7 +48,26 @@ pub fn rows(state: &Value, t: &Strings) -> Vec<Row> {
             local: Some(Local::Browse(Wanted::Picture)),
             ..Row::default()
         },
-    ]
+    ];
+    if let Some(splash) = state["system"]["bootSplash"].as_object() {
+        let error = splash.get("error").and_then(Value::as_str);
+        let value = if splash.get("updating").and_then(Value::as_bool) == Some(true) {
+            "Updating boot splash… Wait before rebooting.".to_string()
+        } else if let Some(error) = error {
+            error.to_string()
+        } else {
+            "Updated. The new splash appears after reboot.".to_string()
+        };
+        rows.push(Row {
+            kind: RowKind::Info,
+            label: "Boot Splash".into(),
+            value,
+            alert: error.is_some(),
+            enabled: true,
+            ..Row::default()
+        });
+    }
+    rows
 }
 
 pub fn icons(pngs: [String; 3]) -> Value {
@@ -100,5 +119,28 @@ mod tests {
             v,
             json!({ "carplayIcon120": "a", "carplayIcon180": "b", "carplayIcon256": "c" })
         );
+    }
+
+    #[test]
+    fn boot_splash_progress_and_failures_are_visible_on_the_icon_page() {
+        let t = Strings::default();
+        let updating = json!({ "system": { "bootSplash": { "updating": true, "error": null } } });
+        let row = rows(&updating, &t).pop().unwrap();
+        assert_eq!(row.label, "Boot Splash");
+        assert!(row.value.contains("Wait before rebooting"));
+        let ready = json!({ "system": { "bootSplash": { "updating": false, "error": null } } });
+        assert!(
+            rows(&ready, &t)
+                .last()
+                .unwrap()
+                .value
+                .contains("after reboot")
+        );
+        let failed =
+            json!({ "system": { "bootSplash": { "updating": false, "error": "disk full" } } });
+        let row = rows(&failed, &t).pop().unwrap();
+        assert!(row.alert);
+        assert_eq!(row.value, "disk full");
+        assert_eq!(rows(&json!({}), &t).len(), 3);
     }
 }

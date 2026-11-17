@@ -74,6 +74,22 @@ back to 0; live values outside 0–2,000 ms are rejected.
 Additional buffering delays playback and responses to media controls. It can accommodate late delivery
 within the available reserve; it cannot recover permanently lost packets or cover an unlimited outage.
 
+## UI icon and boot splash
+
+On Linux, **Appearance → UI Icon** also updates an installed, active LIVI Plymouth theme.
+The chosen image fits inside a centered 256 × 256 area on the original transparent 512 × 512
+canvas, keeping its aspect ratio, colors and transparency. The existing black background and
+display scaling remain the same. **Reset** restores the original LIVI splash image.
+
+The bundled privileged helper updates `/usr/share/plymouth/themes/livi/` and rebuilds the initramfs.
+Wait for the **Boot Splash** row to say the update is complete before rebooting. Failed rebuilds
+are retried; unchanged images do not rebuild at every startup. Existing custom UI icons are also
+synchronized on startup. Updating the AppImage is sufficient for an existing active LIVI theme;
+reinstalling is unnecessary. Reinstalling preserves the installed logo.
+
+This does not install or enable Plymouth, or replace another active theme. To install the LIVI
+splash, choose the boot splash option in the installer first.
+
 ## Build the branch for a Raspberry Pi
 
 `nightly` is a rolling GitHub **release tag**, not a source branch. `startup-volume` starts at the

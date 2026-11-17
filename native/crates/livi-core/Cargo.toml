@@ -51,6 +51,9 @@ zbus = { workspace = true, features = ["tokio"] }
 livi-aaudio.workspace = true
 livi-net.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 livi-rtlsdr.workspace = true
 

@@ -18,6 +18,7 @@ const SWITCHES: &[&str] = &[
     "--install-udev-rule",
     "--install-gvfs-guard",
     "--install-kiosk-unit",
+    "--update-boot-splash",
     "--wifi-ap-claim",
     "--wifi-ap-teardown",
     "--bt-tunnel",
@@ -128,6 +129,9 @@ fn main() -> ExitCode {
         }
         if let Some(at) = std::env::args().position(|a| a == "--install-kiosk-unit") {
             return linux_main::run_install_kiosk_unit(std::env::args().nth(at + 1));
+        }
+        if let Some(at) = std::env::args().position(|a| a == "--update-boot-splash") {
+            return linux_main::run_update_boot_splash(std::env::args().nth(at + 1));
         }
         if let Some(at) = std::env::args().position(|a| a == "--install-gvfs-guard") {
             let mut rest = std::env::args().skip(at + 1);

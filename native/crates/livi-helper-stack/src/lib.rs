@@ -5,6 +5,8 @@
 pub mod aa_sock;
 pub mod bluetoothd;
 pub mod bonjour;
+#[cfg(target_os = "linux")]
+mod boot_splash;
 pub mod bringup;
 pub mod clock;
 #[cfg(target_vendor = "apple")]
