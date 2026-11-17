@@ -1,7 +1,7 @@
 # LIVI installer library, sourced by scripts/install/*/install.sh.
 
-LIVI_REPO="${LIVI_REPO:-f-io/LIVI}"
-LIVI_BRANCH="${LIVI_INSTALLER_BRANCH:-main}"
+LIVI_REPO="${LIVI_REPO:-ethanrushh/LIVI}"
+LIVI_BRANCH="${LIVI_INSTALLER_BRANCH:-startup-volume}"
 LIVI_RAW="https://raw.githubusercontent.com/${LIVI_REPO}/${LIVI_BRANCH}"
 LIVI_API="https://api.github.com/repos/${LIVI_REPO}"
 LIVI_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -102,7 +102,7 @@ livi_pick_channel() {
       echo ""
       echo "Which build should be installed?"
       echo "  1) release   the latest tagged release"
-      echo "  2) nightly   the latest build of main"
+      echo "  2) nightly   the rolling nightly build from $LIVI_REPO"
       read -r -p "Choice [1]: " reply || true
       case "$(livi_lower "${reply:-}")" in
         2|n|nightly) LIVI_CHANNEL="nightly" ;;
@@ -164,6 +164,18 @@ livi_fetch_appimage() {
 
   mv -f "$tmp" "$dest"
   chmod +x "$dest"
+}
+
+# Keep the updater on the same repository/channel after installation and reboot.
+livi_seed_update_config() {
+  local cfg staged
+  livi_require_jq || return 1
+  mkdir -p "$(dirname "$LIVI_APP_CONFIG")"
+  cfg="$(livi_app_config_jq '.updateRepo = $repo | .updateNightly = $nightly' \
+    --arg repo "$LIVI_REPO" --argjson nightly "$([ "$LIVI_CHANNEL" = nightly ] && echo true || echo false)")" || return 1
+  staged="$(mktemp "${LIVI_APP_CONFIG}.XXXXXX")" || return 1
+  printf '%s\n' "$cfg" > "$staged"
+  mv -f "$staged" "$LIVI_APP_CONFIG"
 }
 
 # livi_fetch_template <appimage> <name> -> prints the path to the extracted template.

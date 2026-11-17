@@ -20,7 +20,7 @@ LIVI_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../common.sh"
 if [ ! -f "$LIVI_LIB" ]; then
   LIVI_LIB="$(mktemp)"
   curl -fsSL \
-    "https://raw.githubusercontent.com/${LIVI_REPO:-f-io/LIVI}/${LIVI_INSTALLER_BRANCH:-main}/scripts/install/common.sh" \
+    "https://raw.githubusercontent.com/${LIVI_REPO:-ethanrushh/LIVI}/${LIVI_INSTALLER_BRANCH:-startup-volume}/scripts/install/common.sh" \
     -o "$LIVI_LIB" || { echo "Error: cannot obtain common.sh" >&2; exit 1; }
 fi
 # shellcheck source=../common.sh
@@ -70,6 +70,7 @@ livi_ask_splash
 livi_ask_hdmi_pr
 
 livi_fetch_appimage "$APPIMAGE_PATH" "$APPIMAGE_SRC"
+livi_seed_update_config
 
 LIVI_EXTRACT_DIR="$(mktemp -d)"
 trap "rm -rf '$LIVI_EXTRACT_DIR'" EXIT

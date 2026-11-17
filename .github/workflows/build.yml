@@ -336,3 +336,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: gh workflow run pages.yml --repo "$REPO" --ref main
+        if: ${{ github.repository == 'f-io/LIVI' }}

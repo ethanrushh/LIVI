@@ -41,22 +41,23 @@ pub enum UpdateAsk {
     Abort,
 }
 
-fn feed_url(nightly: bool) -> String {
-    if let Ok(feed) = std::env::var("UPDATE_FEED")
-        && !feed.is_empty()
-    {
-        return feed;
-    }
-    let repo = std::env::var("UPDATE_REPO").ok().filter(|r| !r.is_empty());
-    let base = format!(
-        "https://api.github.com/repos/{}/releases",
-        repo.as_deref().unwrap_or("f-io/LIVI")
-    );
+fn repository_feed(repo: &str, nightly: bool) -> String {
+    let base = format!("https://api.github.com/repos/{repo}/releases");
     if nightly {
         format!("{base}/tags/{NIGHTLY_TAG}")
     } else {
         format!("{base}/latest")
     }
+}
+
+fn feed_url(repo: &str, nightly: bool) -> String {
+    if let Ok(feed) = std::env::var("UPDATE_FEED")
+        && !feed.is_empty()
+    {
+        return feed;
+    }
+    let override_repo = std::env::var("UPDATE_REPO").ok().filter(|r| !r.is_empty());
+    repository_feed(override_repo.as_deref().unwrap_or(repo), nightly)
 }
 
 fn run_number(title: &str) -> String {
@@ -122,8 +123,8 @@ fn release(feed: &Value) -> Release {
     }
 }
 
-async fn check(client: &reqwest::Client, nightly: bool) -> Result<Release, String> {
-    let feed = feed_url(nightly);
+async fn check(client: &reqwest::Client, repo: &str, nightly: bool) -> Result<Release, String> {
+    let feed = feed_url(repo, nightly);
     let res = client.get(&feed).send().await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
         return Err(format!("feed {}", res.status().as_u16()));
@@ -316,8 +317,9 @@ pub async fn run(
                 Some(UpdateAsk::Check) => {
                     state.checking = true;
                     publish(&core, &state);
-                    let nightly = core.hub.config().update_nightly;
-                    state.latest = match check(&client, nightly).await {
+                    let config = core.hub.config();
+                    let nightly = config.update_nightly;
+                    state.latest = match check(&client, &config.update_repo, nightly).await {
                         Ok(r) => Some(r),
                         Err(e) => {
                             eprintln!("[update] the {} feed did not answer: {e}",
@@ -500,7 +502,18 @@ mod tests {
 
     #[test]
     fn the_channel_picks_the_feed() {
-        assert!(feed_url(false).ends_with("/releases/latest"));
-        assert!(feed_url(true).ends_with("/releases/tags/nightly"));
+        let repo = livi_core_proto::config::defaults().update_repo;
+        assert_eq!(
+            repository_feed(&repo, false),
+            "https://api.github.com/repos/ethanrushh/LIVI/releases/latest"
+        );
+        assert_eq!(
+            repository_feed(&repo, true),
+            "https://api.github.com/repos/ethanrushh/LIVI/releases/tags/nightly"
+        );
+        assert_eq!(
+            repository_feed("another/fork", true),
+            "https://api.github.com/repos/another/fork/releases/tags/nightly"
+        );
     }
 }

@@ -61,6 +61,9 @@ jobs:
         working-directory: native
         run: cargo fmt --all --check
 
+      - name: Check installer update configuration
+        run: bash scripts/install/test-update-config.sh
+
       - name: Check the Rust workspace (clippy, tests)
         working-directory: native
         run: |

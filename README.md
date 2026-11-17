@@ -265,10 +265,14 @@ Settings → General → Tab Settings.
 One script installs LIVI on both desktop and headless hosts, auto-detecting which (override with `--desktop` / `--headless`). It uses apt, dnf or pacman, it runs on Debian/Ubuntu, Fedora, Arch and likely other distros, on arm64 and x86_64.
 
 ```bash
-curl -fL -o install.sh https://raw.githubusercontent.com/f-io/LIVI/main/scripts/install/install.sh
+curl -fL -o install.sh https://raw.githubusercontent.com/ethanrushh/LIVI/startup-volume/scripts/install/install.sh
 chmod +x install.sh
-./install.sh
+LIVI_CHANNEL=nightly ./install.sh
 ```
+
+This fork installs and updates from `ethanrushh/LIVI`. Before installing, publish a nightly build of the
+`startup-volume` branch. See [Startup volume and fork updates](docs/STARTUP-VOLUME.md) for the build steps,
+volume behavior and safety limits.
 
 _Tested on Raspberry Pi OS, Ubuntu 26.04 and Fedora 44._
 

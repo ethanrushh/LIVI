@@ -15,6 +15,10 @@ fn default_startup_volume_limit() -> f64 {
     DEFAULT_STARTUP_VOLUME_LIMIT
 }
 
+fn default_update_repo() -> String {
+    "ethanrushh/LIVI".into()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -209,6 +213,8 @@ pub struct Config {
     pub carplay_icon256: Option<String>,
 
     pub update_nightly: bool,
+    #[serde(default = "default_update_repo")]
+    pub update_repo: String,
     pub dismissed_packages: Vec<String>,
 
     pub bindings: KeyBindings,
@@ -691,6 +697,7 @@ pub fn defaults() -> Config {
         carplay_icon180: empty(),
         carplay_icon256: empty(),
         update_nightly: false,
+        update_repo: default_update_repo(),
         dismissed_packages: Vec::new(),
         bindings: default_bindings(),
     }
