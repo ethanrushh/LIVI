@@ -59,6 +59,11 @@ impl ConfigFile {
         }
 
         let mut config = merge(&current_names(&file), &defaults);
+        if !config.startup_volume_limit.is_finite()
+            || !(0.0..=1.0).contains(&config.startup_volume_limit)
+        {
+            config.startup_volume_limit = defaults.startup_volume_limit;
+        }
         config.settle_night_modes(|_| false);
         if !WIFI_PASSWORD_LEN.contains(&config.wifi_password.chars().count()) {
             println!("[core] wifiPassword is no WPA passphrase, falling back to the default");
@@ -264,6 +269,9 @@ pub fn apply_patch(current: &Config, patch: &Value) -> Result<Config, String> {
         }
     }
     let next: Config = serde_json::from_value(value).map_err(|e| format!("rejected: {e}"))?;
+    if !next.startup_volume_limit.is_finite() || !(0.0..=1.0).contains(&next.startup_volume_limit) {
+        return Err("startupVolumeLimit needs a value from 0 to 1".into());
+    }
 
     let written = serde_json::to_value(&next).map_err(|e| e.to_string())?;
     if let Some(unknown) = patch
@@ -487,6 +495,33 @@ pub mod tests {
             live.get("lastKnownGps").is_none(),
             "the last position lives in state/gps.json"
         );
+    }
+
+    #[test]
+    fn startup_limit_defaults_and_rejects_invalid_values() {
+        let dir = TempDir::new();
+        let file = file_in(&dir);
+        assert_eq!(file.load(&HostFacts::default()).startup_volume_limit, 0.15);
+        for value in [json!("loud"), json!(-0.1), json!(1.1)] {
+            fs::write(
+                dir.0.join("LIVI/config.json"),
+                json!({ "startupVolumeLimit": value }).to_string(),
+            )
+            .unwrap();
+            assert_eq!(file.load(&HostFacts::default()).startup_volume_limit, 0.15);
+            assert!(apply_patch(&defaults(), &json!({ "startupVolumeLimit": value })).is_err());
+        }
+        assert_eq!(
+            apply_patch(&defaults(), &json!({ "startupVolumeLimit": null }))
+                .unwrap()
+                .startup_volume_limit,
+            0.15
+        );
+        for value in [0.0, 0.10, 1.0] {
+            let config = apply_patch(&defaults(), &json!({ "startupVolumeLimit": value })).unwrap();
+            file.save(&config).unwrap();
+            assert_eq!(file.load(&HostFacts::default()).startup_volume_limit, value);
+        }
     }
 
     #[test]

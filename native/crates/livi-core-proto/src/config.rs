@@ -9,6 +9,11 @@ use crate::state::PerScreen;
 
 pub const WIFI_PASSWORD_MIN: usize = 8;
 pub const WIFI_PASSWORD_MAX: usize = 63;
+pub const DEFAULT_STARTUP_VOLUME_LIMIT: f64 = 0.15;
+
+fn default_startup_volume_limit() -> f64 {
+    DEFAULT_STARTUP_VOLUME_LIMIT
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,6 +109,8 @@ pub struct Config {
     pub disable_audio_output: bool,
     pub hu_volume: f64,
     pub hu_volume_link_system: bool,
+    #[serde(default = "default_startup_volume_limit")]
+    pub startup_volume_limit: f64,
     pub audio_volume: f64,
     pub nav_volume: f64,
     pub voice_assistant_volume: f64,
@@ -615,6 +622,7 @@ pub fn defaults() -> Config {
         disable_audio_output: false,
         hu_volume: 0.95,
         hu_volume_link_system: true,
+        startup_volume_limit: DEFAULT_STARTUP_VOLUME_LIMIT,
         audio_volume: 0.95,
         nav_volume: 0.95,
         voice_assistant_volume: 0.95,

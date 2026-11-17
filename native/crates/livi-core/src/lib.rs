@@ -93,7 +93,21 @@ pub async fn run(
         panel_px: system::host::panel_native_px(),
     };
     let config_file = ConfigFile::new(paths.config.clone(), paths.config_backup.clone());
-    let config = config_file.load(&host);
+    #[allow(unused_mut)]
+    let mut config = config_file.load(&host);
+    // Setup may restart WirePlumber. Finish it before verifying mixer state.
+    system::host_setup::prepare().await;
+    #[cfg(target_os = "linux")]
+    let startup_volume = {
+        let guard = audio::system_volume::startup::prepare(config.startup_volume_limit).await?;
+        // Do not let the saved head-unit level or a vehicle bridge restore a loud
+        // value while the system-volume follower is still starting.
+        config.hu_volume = config.hu_volume.clamp(0.0, config.startup_volume_limit);
+        if let Err(e) = config_file.save(&config) {
+            eprintln!("[volume] startup head unit level not saved: {e}");
+        }
+        guard
+    };
     let user_data = paths
         .config
         .parent()
@@ -145,6 +159,9 @@ pub async fn run(
         .map_err(|e| format!("cannot listen on {}: {e}", socket.display()))?;
     println!("[core] listening on {}", socket.display());
 
+    #[cfg(target_os = "linux")]
+    tokio::spawn(startup_volume.follow());
+
     tokio::spawn(dongle::run(core.hub.clone(), dongle_asks));
     tokio::spawn(system::wifi_options::follow(core.clone()));
     let (inside, inside_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -166,7 +183,6 @@ pub async fn run(
         res.gstreamer.clone(),
         core.shared.clone(),
     ));
-    system::host_setup::prepare();
     let privileged = res
         .helper_bin()
         .zip(res.templates.clone())

@@ -15,6 +15,8 @@ use crate::server::Core;
 mod coreaudio;
 #[cfg(target_os = "linux")]
 mod pactl;
+#[cfg(target_os = "linux")]
+pub mod startup;
 
 #[cfg(target_os = "macos")]
 use coreaudio as output;
@@ -43,6 +45,8 @@ impl std::fmt::Display for Fault {
 pub enum OutputEvent {
     Changed,
     New,
+    #[cfg(target_os = "linux")]
+    Reconnected,
 }
 
 fn configured(device: Option<&str>) -> &str {
@@ -169,6 +173,8 @@ pub async fn follow(core: Arc<Core>) {
             }
             Some(event) = events.recv() => match event {
                 OutputEvent::Changed => read_at = Some(Instant::now() + READ_DEBOUNCE),
+                #[cfg(target_os = "linux")]
+                OutputEvent::Reconnected => read_at = Some(Instant::now() + READ_DEBOUNCE),
                 OutputEvent::New => {
                     let Some(device) = mixer.missing.clone() else { continue };
                     if let Ok(level) = output::get(&device).await {

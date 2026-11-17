@@ -41,11 +41,12 @@ fn sink_name(device: &str) -> &str {
     }
 }
 
-async fn pactl(args: &[&str]) -> Result<String, Fault> {
+pub(super) async fn pactl(args: &[&str]) -> Result<String, Fault> {
     let run = Command::new(PACTL)
         .args(args)
         .env("LC_ALL", "C")
         .stdin(Stdio::null())
+        .kill_on_drop(true)
         .output();
     let out = tokio::time::timeout(CALL_TIMEOUT, run)
         .await
@@ -96,6 +97,9 @@ pub fn watch(tx: mpsc::UnboundedSender<OutputEvent>) -> Watch {
             if let Ok(mut child) = child
                 && let Some(out) = child.stdout.take()
             {
+                if tx.send(OutputEvent::Reconnected).is_err() {
+                    return;
+                }
                 let mut lines = BufReader::new(out).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
                     let event = if line.contains("Event 'change' on sink #") {

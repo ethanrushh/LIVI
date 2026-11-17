@@ -26,7 +26,7 @@ fn write_bt_roles(file: &Path) -> std::io::Result<bool> {
     Ok(true)
 }
 
-pub fn prepare() {
+pub async fn prepare() {
     if !cfg!(target_os = "linux") {
         return;
     }
@@ -38,16 +38,14 @@ pub fn prepare() {
         Ok(false) => {}
         Ok(true) => {
             println!("[setup] {} written, restarting wireplumber", file.display());
-            tokio::spawn(async {
-                let restart = privileged::quietly(
-                    &privileged::systemctl(),
-                    &["--user", "restart", "wireplumber"],
-                )
-                .await;
-                if !restart {
-                    eprintln!("[setup] wireplumber did not restart");
-                }
-            });
+            let restart = privileged::quietly(
+                &privileged::systemctl(),
+                &["--user", "restart", "wireplumber"],
+            )
+            .await;
+            if !restart {
+                eprintln!("[setup] wireplumber did not restart");
+            }
         }
         Err(e) => eprintln!("[setup] {} not written: {e}", file.display()),
     }

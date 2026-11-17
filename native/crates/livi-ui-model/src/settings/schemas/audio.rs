@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Additional terms: see NOTICE
 
-use crate::settings::node::{Label, Node, OptionSource, OptionValue, Shown, choice, number_choice};
+use crate::settings::node::{
+    Condition, Label, Node, OptionSource, OptionValue, Shown, choice, number_choice,
+};
 
 fn volume(key: &'static str, text: &'static str, icon: &'static str, path: &'static str) -> Node {
     Node::slider(Label::new(key, text), path)
@@ -25,6 +27,12 @@ pub fn schema() -> Node {
         Label::new("settings.audio", "Audio"),
         vec![
             volume("settings.huVolume", "Head Unit", "huVolume", "huVolume"),
+            Node::slider(Label::plain("Startup Volume Limit"), "startupVolumeLimit")
+                .icon("huVolume")
+                .display_value()
+                .shown(Shown::Percent)
+                .page(Label::plain("Startup Volume Limit"))
+                .disabled(Condition::NotLinux),
             volume("settings.music", "Music", "music", "audioVolume"),
             volume(
                 "settings.navigation",
