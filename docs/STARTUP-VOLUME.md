@@ -60,7 +60,12 @@ DAC/amplifier chain.
 commit that was tagged nightly when this work began (`eaa9447c`). Updates download release assets;
 they do not compile or pull a Git branch on the Pi.
 
-After pushing `startup-volume` to the fork:
+Pushing `startup-volume` to the fork builds a Linux ARM64 AppImage and publishes it to the fork's
+`nightly` release. Wait for the **build** workflow to succeed before reinstalling. The automatic build
+is limited to this branch; other branches retain the existing workflow behavior. Rust formatting,
+tests for the affected crates and installer update-config tests must pass before packaging this branch.
+
+To rebuild manually or include other platforms:
 
 1. Enable Actions in `ethanrushh/LIVI` if the fork has not enabled them.
 2. Open **Actions → build → Run workflow** and select **startup-volume** as the branch.
@@ -75,7 +80,7 @@ dependencies still come from upstream's `assets` release; they are not the insta
 
 Only one release can own the fork's `nightly` tag. Publishing nightly from another source branch replaces
 that feed. Keep publishing from `startup-volume` while testing this feature. To update the Pi after
-further commits, publish another nightly from this branch, then use LIVI's updater.
+further commits, push this branch, wait for its build to publish, then use LIVI's updater.
 
 ## Reinstall and keep updates on the fork
 
