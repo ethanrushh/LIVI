@@ -78,6 +78,26 @@ pub enum Action {
         position_ms: u32,
     },
     VideoClose,
+    LocalVideoBrowse {
+        directory: Option<String>,
+    },
+    LocalVideoOpen {
+        path: String,
+    },
+    LocalVideoPlay {
+        playing: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    LocalVideoSeek {
+        position_ms: u32,
+    },
+    LocalVideoClose,
+    LocalVideoUp,
+    LocalVideoNext,
+    LocalVideoRestart,
+    LocalVideoAutoNext {
+        on: bool,
+    },
     SelectDevice {
         id: String,
     },

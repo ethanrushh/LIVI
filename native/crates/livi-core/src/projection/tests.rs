@@ -71,6 +71,7 @@ impl Rig {
             sessions: Default::default(),
             now_playing: Default::default(),
             video_playback: None,
+            local_videos: Default::default(),
             telemetry: Default::default(),
             navigation: Default::default(),
             system: Default::default(),

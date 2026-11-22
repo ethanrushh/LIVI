@@ -125,6 +125,13 @@ impl Core {
     }
 
     pub fn media(&self, control: MediaControl) {
+        if self.hub.watch().borrow().local_videos.current.is_some() {
+            let _ = self
+                .asks
+                .local_video
+                .send(crate::local_video::Command::Media(control));
+            return;
+        }
         if !self.radio_media(control) {
             let _ = self.asks.commands.send(UiCommand::Media(control));
         }
@@ -135,6 +142,13 @@ impl Core {
             .radio
             .send(ask)
             .map_err(|_| "the radio is not available".to_string())
+    }
+
+    fn local_video(&self, command: crate::local_video::Command) -> Result<(), String> {
+        self.asks
+            .local_video
+            .send(command)
+            .map_err(|_| "Local video playback is unavailable".into())
     }
 
     fn phone_resume(&self) {
@@ -266,6 +280,30 @@ impl Core {
             Action::VideoClose => {
                 let _ = self.asks.commands.send(UiCommand::VideoClose);
                 Ok(())
+            }
+            Action::LocalVideoBrowse { directory } => {
+                self.local_video(crate::local_video::Command::Browse(directory))
+            }
+            Action::LocalVideoOpen { path } => {
+                let _ = self.ask_radio(RadioAsk::Stop);
+                let _ = self
+                    .asks
+                    .commands
+                    .send(UiCommand::Media(MediaControl::Pause));
+                self.local_video(crate::local_video::Command::Open(path))
+            }
+            Action::LocalVideoPlay { playing } => {
+                self.local_video(crate::local_video::Command::Play(playing))
+            }
+            Action::LocalVideoSeek { position_ms } => {
+                self.local_video(crate::local_video::Command::Seek(position_ms))
+            }
+            Action::LocalVideoClose => self.local_video(crate::local_video::Command::Close),
+            Action::LocalVideoUp => self.local_video(crate::local_video::Command::Up),
+            Action::LocalVideoNext => self.local_video(crate::local_video::Command::Next),
+            Action::LocalVideoRestart => self.local_video(crate::local_video::Command::Restart),
+            Action::LocalVideoAutoNext { on } => {
+                self.local_video(crate::local_video::Command::AutoNext(on))
             }
             Action::NextDevice => {
                 let _ = self.asks.commands.send(UiCommand::NextDevice);
@@ -424,6 +462,8 @@ async fn client(core: Arc<Core>, stream: UnixStream) -> io::Result<()> {
                         }
                         Ok(ToCore::LinkSpeed { on: false }) => link_speed_viewer = None,
                         Ok(ToCore::Path { path }) => {
+                            let visible = path == "/videos";
+                            let _ = core.local_video(crate::local_video::Command::Visible(visible));
                             core.ui_path.send_replace(path);
                         }
                         Ok(ToCore::Hello { .. }) => {}
@@ -534,6 +574,7 @@ mod tests {
             sessions: Default::default(),
             now_playing: Default::default(),
             video_playback: None,
+            local_videos: Default::default(),
             telemetry: Default::default(),
             navigation: Default::default(),
             system: Default::default(),

@@ -474,6 +474,7 @@ mod tests {
             sessions: Default::default(),
             now_playing: Default::default(),
             video_playback: None,
+            local_videos: Default::default(),
             telemetry,
             navigation: Default::default(),
             system: Default::default(),

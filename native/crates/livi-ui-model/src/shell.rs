@@ -10,6 +10,7 @@ pub enum Tab {
     Projection,
     Telemetry,
     Media,
+    Videos,
     Camera,
     Settings,
 }
@@ -35,6 +36,9 @@ pub fn tabs(config: &Config) -> Vec<Tab> {
     }
     if config.media.main {
         tabs.push(Tab::Media);
+    }
+    if cfg!(target_os = "linux") {
+        tabs.push(Tab::Videos);
     }
     if config.camera.main && !config.camera_id.is_empty() {
         tabs.push(Tab::Camera);
@@ -102,19 +106,26 @@ mod tests {
         config.camera_id.clear();
         assert_eq!(
             tabs(&config),
-            vec![Tab::Projection, Tab::Media, Tab::Settings]
+            [Tab::Projection, Tab::Media, Tab::Videos, Tab::Settings]
+                .into_iter()
+                .filter(|t| *t != Tab::Videos || cfg!(target_os = "linux"))
+                .collect::<Vec<_>>()
         );
         config.dashboard.main = true;
         config.camera_id = "cam0".into();
         assert_eq!(
             tabs(&config),
-            vec![
+            [
                 Tab::Projection,
                 Tab::Telemetry,
                 Tab::Media,
+                Tab::Videos,
                 Tab::Camera,
                 Tab::Settings
             ]
+            .into_iter()
+            .filter(|t| *t != Tab::Videos || cfg!(target_os = "linux"))
+            .collect::<Vec<_>>()
         );
     }
 

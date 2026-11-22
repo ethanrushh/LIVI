@@ -15,6 +15,7 @@ core|dnsmasq-base|cmd:dnsmasq|DHCP for the wireless access point|dnsmasq|dnsmasq
 core|iw|cmd:iw|Wi-Fi interface control|iw|iw
 core|rfkill|cmd:rfkill|Wi-Fi and Bluetooth radio control|util-linux|util-linux
 core|pulseaudio-utils|cmd:pactl|Reading and setting the system volume|pulseaudio-utils|libpulse
+core|udisks2|cmd:udisksctl|Mounting USB drives for local video playback|udisks2|udisks2
 core|avahi-daemon|cmd:avahi-daemon|CarPlay discovery over Wi-Fi|avahi|avahi
 core|avahi-utils|cmd:avahi-publish-service|CarPlay mDNS publish and browse, the helper spawns avahi-publish-service and avahi-browse|avahi-tools|avahi
 core|libva2|file:/usr/lib/*/libva.so.2|Host VA-API runtime, the bundled H.264 software decoder links it|libva|libva

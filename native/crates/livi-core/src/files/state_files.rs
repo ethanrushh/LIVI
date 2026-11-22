@@ -359,6 +359,7 @@ mod tests {
             sessions: Default::default(),
             now_playing: Default::default(),
             video_playback: None,
+            local_videos: Default::default(),
             telemetry: telemetry.as_object().cloned().unwrap_or_default(),
             navigation: Default::default(),
             system: Default::default(),

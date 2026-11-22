@@ -40,6 +40,7 @@ const HELPER_MAX_RESTARTS: u32 = 5;
 const COMPOSITOR_STOP_GRACE: Duration = Duration::from_secs(3);
 
 pub struct Services {
+    local_video: Option<Watched>,
     helper: Option<HelperSupervisor>,
     compositor: Option<Watched>,
     ui: Option<UiSupervisor>,
@@ -261,6 +262,18 @@ impl Services {
             state.clone(),
         ));
         tokio::spawn(crate::vehicle::blinker::run(hub.clone(), gst.clone()));
+        let local_video = asks.local_video.take().map(|commands| {
+            let (stop, stop_rx) = oneshot::channel();
+            let task = tokio::spawn(crate::local_video::run(
+                hub.clone(),
+                gst.clone(),
+                ctrl.clone(),
+                commands,
+                user_data.join("state/local-videos.json"),
+                stop_rx,
+            ));
+            Watched { stop, task }
+        });
         tokio::spawn(crate::camera::run(
             hub.clone(),
             gst.clone(),
@@ -327,6 +340,7 @@ impl Services {
         tokio::spawn(follow_host(gst, plane, airplay_plane, clusters, state));
 
         Self {
+            local_video,
             helper,
             compositor,
             ui,
@@ -334,6 +348,10 @@ impl Services {
     }
 
     pub async fn stop(mut self) {
+        if let Some(local_video) = self.local_video.take() {
+            let _ = local_video.stop.send(());
+            let _ = local_video.task.await;
+        }
         if let Some(ui) = self.ui.take() {
             ui.stop().await;
         }

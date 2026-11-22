@@ -18,6 +18,8 @@ pub struct State {
     pub now_playing: NowPlaying,
     #[serde(default)]
     pub video_playback: Option<VideoPlayback>,
+    #[serde(default)]
+    pub local_videos: LocalVideos,
     pub navigation: Navigation,
     pub system: System,
     pub devices: Vec<DeviceView>,
@@ -42,6 +44,7 @@ impl State {
             "sessions" => self.sessions = read(value)?,
             "nowPlaying" => self.now_playing = read(value)?,
             "videoPlayback" => self.video_playback = read(value)?,
+            "localVideos" => self.local_videos = read(value)?,
             "navigation" => self.navigation = read(value)?,
             "system" => self.system = read(value)?,
             "devices" => self.devices = read(value)?,
@@ -401,6 +404,39 @@ pub struct VideoPlayback {
     pub playing: bool,
     pub position_ms: f64,
     pub duration_ms: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LocalVideos {
+    pub directory: Option<String>,
+    pub entries: Vec<LocalVideoEntry>,
+    pub current: Option<LocalVideo>,
+    pub auto_next: bool,
+    pub loading: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LocalVideoEntry {
+    pub path: String,
+    pub name: String,
+    pub directory: bool,
+    pub position_ms: f64,
+    pub duration_ms: Option<f64>,
+    pub completed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LocalVideo {
+    pub path: String,
+    pub name: String,
+    pub playing: bool,
+    pub position_ms: f64,
+    pub duration_ms: Option<f64>,
+    pub seekable: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

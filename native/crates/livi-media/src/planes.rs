@@ -174,6 +174,8 @@ impl MainPlane {
 }
 
 pub struct VideoPlane {
+    id: u32,
+    tag: &'static str,
     gst: Output,
     comp: CompositorControl,
     stops: AtomicU64,
@@ -182,7 +184,17 @@ pub struct VideoPlane {
 
 impl VideoPlane {
     pub fn new(gst: Output, comp: CompositorControl) -> Arc<Self> {
+        Self::on(PLANE_VIDEO, VIDEO_TAG, gst, comp)
+    }
+
+    pub fn local(id: u32, gst: Output, comp: CompositorControl) -> Arc<Self> {
+        Self::on(id, livi_output_proto::LOCAL_VIDEO_TAG, gst, comp)
+    }
+
+    fn on(id: u32, tag: &'static str, gst: Output, comp: CompositorControl) -> Arc<Self> {
         Arc::new(Self {
+            id,
+            tag,
             gst,
             comp,
             stops: AtomicU64::new(0),
@@ -199,39 +211,39 @@ impl VideoPlane {
             return false;
         }
         self.comp
-            .videocfg(VIDEO_TAG, SCREEN, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            .videocfg(self.tag, SCREEN, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         self.comp
-            .videoshow(VIDEO_TAG, self.shown.load(Ordering::SeqCst));
-        self.comp.claim(VIDEO_TAG).await;
+            .videoshow(self.tag, self.shown.load(Ordering::SeqCst));
+        self.comp.claim(self.tag).await;
         if self.turn() != turn {
             return false;
         }
-        self.gst.play_url(PLANE_VIDEO, url, audio_device);
+        self.gst.play_url(self.id, url, audio_device);
         true
     }
 
     pub fn set_rate(&self, rate: f64) {
-        self.gst.set_play_rate(PLANE_VIDEO, rate);
+        self.gst.set_play_rate(self.id, rate);
     }
 
     pub fn seek(&self, seconds: f64) {
-        self.gst.seek(PLANE_VIDEO, seconds);
+        self.gst.seek(self.id, seconds);
     }
 
     pub fn set_muted(&self, muted: bool) {
-        self.gst.set_play_muted(PLANE_VIDEO, muted);
+        self.gst.set_play_muted(self.id, muted);
     }
 
     pub fn set_shown(&self, shown: bool) {
         self.shown.store(shown, Ordering::SeqCst);
-        self.comp.videoshow(VIDEO_TAG, shown);
+        self.comp.videoshow(self.tag, shown);
     }
 
     pub fn stop(&self) {
         self.stops.fetch_add(1, Ordering::SeqCst);
-        self.comp.release(VIDEO_TAG);
-        self.comp.videoshow(VIDEO_TAG, false);
-        self.gst.stop(PLANE_VIDEO);
+        self.comp.release(self.tag);
+        self.comp.videoshow(self.tag, false);
+        self.gst.stop(self.id);
     }
 }
 

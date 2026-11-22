@@ -443,6 +443,7 @@ fn kept_cluster(cfg: &Config, theme: Theme) -> Cluster {
 }
 
 pub struct UiAsks {
+    pub local_video: Option<mpsc::UnboundedReceiver<crate::local_video::Command>>,
     pub wants: watch::Receiver<PerScreen<Front>>,
     pub commands: mpsc::UnboundedReceiver<UiCommand>,
     pub input: mpsc::UnboundedReceiver<Input>,
@@ -457,6 +458,7 @@ pub struct UiAsks {
 }
 
 pub struct UiSenders {
+    pub local_video: mpsc::UnboundedSender<crate::local_video::Command>,
     pub wants: watch::Sender<PerScreen<Front>>,
     pub commands: mpsc::UnboundedSender<UiCommand>,
     pub input: mpsc::UnboundedSender<Input>,
@@ -480,6 +482,7 @@ pub type UpdateAsks = mpsc::UnboundedReceiver<UpdateAsk>;
 pub fn ui_channels(wants: PerScreen<Front>) -> (UiSenders, UiAsks, DongleAsks, UpdateAsks) {
     let (wants_tx, wants_rx) = watch::channel(wants);
     let (commands_tx, commands_rx) = mpsc::unbounded_channel();
+    let (local_video_tx, local_video_rx) = mpsc::unbounded_channel();
     let (input_tx, input_rx) = mpsc::unbounded_channel();
     let (dongle_tx, dongle_rx) = mpsc::unbounded_channel();
     let (viewers_tx, viewers_rx) = watch::channel(0);
@@ -491,6 +494,7 @@ pub fn ui_channels(wants: PerScreen<Front>) -> (UiSenders, UiAsks, DongleAsks, U
     let feed = spectrum::Feed::new();
     (
         UiSenders {
+            local_video: local_video_tx,
             wants: wants_tx,
             commands: commands_tx.clone(),
             input: input_tx.clone(),
@@ -504,6 +508,7 @@ pub fn ui_channels(wants: PerScreen<Front>) -> (UiSenders, UiAsks, DongleAsks, U
             ap_ready: ap_ready_tx,
         },
         UiAsks {
+            local_video: Some(local_video_rx),
             wants: wants_rx,
             commands: commands_rx,
             input: input_rx,

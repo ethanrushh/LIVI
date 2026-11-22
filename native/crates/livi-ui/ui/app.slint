@@ -16,6 +16,9 @@ import { Dashboard, DashState, GaugeData, CapData, TrailData, LabelData, LaneDat
 import { LevelOverlay, PhoneOverlay, OverlayState } from "overlays.slint";
 import { MaskData, ViewArea } from "mask.slint";
 import { TouchCalibration, TouchCalibrationState } from "touch_calibration.slint";
+import { LocalVideosPage, LocalVideosState, LocalVideoRow } from "local_videos.slint";
+
+export { LocalVideosState, LocalVideoRow }
 
 export { Theme, Focus, FocusZone, Page, PhoneState, TabData, TouchPhase, SettingsState, ScreenKind, RowData, RowKind, PickData, KnobData, MediaSource, MediaText, Press, DabState, StationData, DashState, GaugeData, CapData, TrailData, LabelData, LaneData, LaneArrowData, LampData, OverlayState, MaskData, ViewArea, TouchCalibrationState }
 
@@ -67,7 +70,8 @@ export component AppWindow inherits Window {
     callback seek(float);
     callback spectrum-changed(bool);
 
-    property <bool> nav-hidden: root.page == Page.projection && root.phone == PhoneState.streaming;
+    property <bool> nav-hidden: (root.page == Page.projection && root.phone == PhoneState.streaming)
+        || (root.page == Page.videos && LocalVideosState.active);
     property <bool> nav-asleep;
 
     public function wake-nav() {
@@ -205,6 +209,10 @@ export component AppWindow inherits Window {
                 spectrum-changed(on) => { root.spectrum-changed(on); }
             }
             if root.page == Page.settings: SettingsView {
+                width: parent.width;
+                height: parent.height;
+            }
+            if root.page == Page.videos: LocalVideosPage {
                 width: parent.width;
                 height: parent.height;
             }

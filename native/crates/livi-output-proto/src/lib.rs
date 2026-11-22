@@ -64,6 +64,9 @@ pub const PLANE_MAIN: u32 = 0x7a00_0001;
 pub const PLANE_VIDEO: u32 = 0x7a00_0002;
 pub const PLANE_CAMERA: u32 = 0x7a00_0003;
 pub const PLANE_AIRPLAY: u32 = 0x7a00_0004;
+// A new id per local file keeps late status messages from advancing a new playlist item.
+pub const LOCAL_VIDEO_MIN: u32 = 0x7a01_0000;
+pub const LOCAL_VIDEO_MAX: u32 = 0x7a01_ffff;
 pub const PLANE_CLUSTER_RECV: u32 = 0x7a00_0010;
 pub const CLUSTER_RECV_ID: u32 = 0x7a00_0010;
 pub const CLUSTER_PLANE_MIN: u32 = 0x7a00_0011;
@@ -86,12 +89,16 @@ pub const MAIN_TAG: &str = "main";
 pub const VIDEO_TAG: &str = "video";
 pub const CAMERA_TAG: &str = "camera";
 pub const AIRPLAY_TAG: &str = "airplay";
+pub const LOCAL_VIDEO_TAG: &str = "local-video";
 
 pub fn cluster_tag(screen: &str) -> String {
     format!("cluster-{screen}")
 }
 
 pub fn plane_place(id: u32) -> Option<(String, &'static str)> {
+    if (LOCAL_VIDEO_MIN..=LOCAL_VIDEO_MAX).contains(&id) {
+        return Some((LOCAL_VIDEO_TAG.into(), SCREENS[0]));
+    }
     if id == PLANE_MAIN {
         return Some((MAIN_TAG.into(), SCREENS[0]));
     }

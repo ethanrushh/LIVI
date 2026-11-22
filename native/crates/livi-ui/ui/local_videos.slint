@@ -1,0 +1,180 @@
+// SPDX-FileCopyrightText: 2025-2026 Lasse Heitgres
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Additional terms: see NOTICE
+
+import { Theme, Ui } from "theme.slint";
+import { Focus } from "focus.slint";
+import { RowButton } from "settings/actions.slint";
+import { VideoControls } from "video_controls.slint";
+
+export struct LocalVideoRow {
+    name: string,
+    detail: string,
+    directory: bool,
+    progress: float,
+}
+
+export global LocalVideosState {
+    in property <[LocalVideoRow]> entries;
+    in property <string> title: "Local videos";
+    in property <bool> can-back;
+    in property <bool> auto-next;
+    in property <bool> loading;
+    in property <string> error;
+    in property <bool> active;
+    in property <bool> playing;
+    in property <bool> seekable;
+    in property <float> position-ms;
+    in property <float> duration-ms;
+    in property <string> filename;
+    in property <bool> has-next;
+    in-out property <bool> controls-shown: true;
+    in-out property <int> controls-idle;
+    callback pick(int);
+    callback back();
+    callback sources();
+    callback refresh();
+    callback auto-next-changed(bool);
+    callback play-pause();
+    callback seek(float);
+    callback close();
+    callback next();
+    callback restart();
+}
+
+export component LocalVideosPage inherits Rectangle {
+    property <int> focus-offset: LocalVideosState.can-back ? 4 : 3;
+    background: LocalVideosState.active ? transparent : Theme.background;
+
+    if !LocalVideosState.active: VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            Text {
+                text: LocalVideosState.title;
+                color: Theme.text;
+                font-size: 26px;
+                font-weight: 500;
+                overflow: elide;
+                horizontal-stretch: 1;
+                vertical-alignment: center;
+            }
+            RowButton {
+                text: "Sources";
+                outlined: true;
+                focused: Focus.main(0);
+                clicked => { LocalVideosState.sources(); }
+            }
+            RowButton {
+                text: "Refresh";
+                outlined: true;
+                focused: Focus.main(1);
+                clicked => { LocalVideosState.refresh(); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 12px;
+            RowButton {
+                text: "Back";
+                enabled: LocalVideosState.can-back;
+                outlined: true;
+                focused: Focus.main(2);
+                clicked => { LocalVideosState.back(); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            RowButton {
+                text: "Play next automatically: " + (LocalVideosState.auto-next ? "On" : "Off");
+                outlined: !LocalVideosState.auto-next;
+                focused: Focus.main(root.focus-offset - 1);
+                clicked => { LocalVideosState.auto-next-changed(!LocalVideosState.auto-next); }
+            }
+        }
+        if LocalVideosState.error != "": Text {
+            text: LocalVideosState.error;
+            color: Theme.text;
+            wrap: word-wrap;
+            font-size: 16px;
+        }
+        if LocalVideosState.loading: Text {
+            text: "Loading…";
+            color: Theme.text-secondary;
+            font-size: 18px;
+        }
+        if LocalVideosState.entries.length == 0 && !LocalVideosState.loading: Text {
+            text: "No videos here. Add videos to your Videos folder or connect a USB drive.";
+            color: Theme.text-secondary;
+            wrap: word-wrap;
+            font-size: 18px;
+        }
+        flick := Flickable {
+            property <int> focus-index: Focus.main-index;
+            changed focus-index => {
+                let row = self.focus-index - root.focus-offset;
+                if row >= 0 && row < LocalVideosState.entries.length {
+                    let top = row * 76px;
+                    if top + flick.content-y < 0px {
+                        flick.content-y = -top;
+                    } else if top + 72px + flick.content-y > flick.height {
+                        flick.content-y = flick.height - top - 72px;
+                    }
+                }
+            }
+            vertical-stretch: 1;
+            content-height: LocalVideosState.entries.length * 76px;
+            content-width: self.width;
+            for entry[i] in LocalVideosState.entries: Rectangle {
+                x: 0;
+                y: i * 76px;
+                width: flick.width;
+                height: 72px;
+                border-radius: 8px;
+                background: touch.pressed || Focus.main(root.focus-offset + i) ? Theme.lit-pressed : Theme.surface;
+                border-width: Focus.main(root.focus-offset + i) ? 2px : 0;
+                border-color: Theme.primary;
+                Image {
+                    x: 16px;
+                    width: 28px;
+                    height: self.width;
+                    y: (parent.height - self.height) / 2;
+                    source: entry.directory ? @image-url("icons/FolderOutlined.svg") : @image-url("icons/PlayCircleOutlined.svg");
+                    colorize: Theme.primary;
+                }
+                VerticalLayout {
+                    x: 60px;
+                    width: parent.width - 76px;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    spacing: 4px;
+                    Text { text: entry.name; color: Theme.text; font-size: 20px; overflow: elide; }
+                    Text { text: entry.detail; color: Theme.text-secondary; font-size: 14px; overflow: elide; }
+                }
+                if !entry.directory && entry.progress > 0: Rectangle {
+                    x: 60px;
+                    y: parent.height - 4px;
+                    width: (parent.width - 76px) * entry.progress;
+                    height: 3px;
+                    background: Theme.primary;
+                }
+                touch := TouchArea { clicked => { LocalVideosState.pick(i); } }
+            }
+        }
+    }
+
+    if LocalVideosState.active: VideoControls {
+        playing: LocalVideosState.playing;
+        elapsed-ms: LocalVideosState.position-ms;
+        total-ms: LocalVideosState.duration-ms;
+        can-seek: LocalVideosState.seekable;
+        title: LocalVideosState.filename;
+        local: true;
+        has-next: LocalVideosState.has-next;
+        shown <=> LocalVideosState.controls-shown;
+        idle <=> LocalVideosState.controls-idle;
+        play-pause => { LocalVideosState.play-pause(); }
+        seek(f) => { LocalVideosState.seek(f); }
+        close => { LocalVideosState.close(); }
+        next => { LocalVideosState.next(); }
+        restart => { LocalVideosState.restart(); }
+    }
+}

@@ -36,6 +36,7 @@ pub enum Update {
     ViewArea(livi_core_proto::config::ViewArea),
     Fonts(Vec<String>),
     Video(Option<VideoPlayback>),
+    LocalVideos(livi_core_proto::state::LocalVideos),
     Mirrored(bool),
     Held(bool),
 }
@@ -152,6 +153,9 @@ impl Follow {
                 self.video = Some(next);
                 out.push(Update::Video(next));
             }
+        }
+        if hit("localVideos") {
+            out.push(Update::LocalVideos(state.local_videos.clone()));
         }
         if hit("sessions") || hit("config") {
             let next = mask(state, Stream::Main);

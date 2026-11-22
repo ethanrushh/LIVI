@@ -15,6 +15,7 @@ mod fullscreen;
 mod icon_ui;
 mod icons;
 mod keys_ui;
+mod local_videos_ui;
 mod media;
 mod media_ui;
 mod overlay_ui;
@@ -109,6 +110,7 @@ fn tab(t: Tab) -> TabData {
         Tab::Projection => (Page::Projection, "CropPortraitOutlined"),
         Tab::Telemetry => (Page::Telemetry, "SpeedOutlined"),
         Tab::Media => (Page::Media, "PlayCircleOutlined"),
+        Tab::Videos => (Page::Videos, "FolderOutlined"),
         Tab::Camera => (Page::Camera, "CameraOutlined"),
         Tab::Settings => (Page::Settings, "SettingsOutlined"),
     };
@@ -219,6 +221,7 @@ fn apply(ui: &AppWindow, update: Update) {
         Update::MainMask(mask) => ui.set_main_mask(dashboard_ui::mask_data(mask)),
         Update::ViewArea(area) => ui.set_view_area(view_area(area)),
         Update::Video(video) => video_ui::show(ui, video),
+        Update::LocalVideos(videos) => local_videos_ui::apply(ui, videos),
         Update::Mirrored(mirrored) => video_ui::mirrored(ui, mirrored),
         Update::Held(held) => ui.set_held(held),
         Update::Fonts(paths) => {
@@ -259,6 +262,7 @@ fn open_path(ui: &AppWindow, path: &str) {
         None | Some("projection") => Page::Projection,
         Some("telemetry") => Page::Telemetry,
         Some("media") => Page::Media,
+        Some("videos") => Page::Videos,
         Some("camera") => Page::Camera,
         Some("settings") => Page::Settings,
         Some(other) => {
@@ -297,6 +301,7 @@ fn reported(ui: &AppWindow, client: &Client, page: Page) {
         Page::Telemetry if dashboard_ui::map_shown(ui) => (Front::Cluster, "/telemetry"),
         Page::Telemetry => (Front::Livi, "/telemetry"),
         Page::Media => (Front::Livi, media_ui::path(ui)),
+        Page::Videos => (Front::Livi, "/videos"),
         Page::Camera => (Front::Camera, "/camera"),
         Page::Settings => (Front::Livi, "/settings"),
     };
@@ -431,6 +436,7 @@ fn wire(ui: &AppWindow, client: &Client) {
         move |phase, x, y| send_touch(&c, phase, x, y)
     });
     media_ui::wire(ui, client);
+    local_videos_ui::wire(ui, client);
     ui.on_spectrum_changed({
         let c = client.clone();
         move |on| c.spectrum(on)
@@ -587,6 +593,7 @@ pub fn run(
             "projection" => Page::Projection,
             "settings" => Page::Settings,
             "telemetry" => Page::Telemetry,
+            "videos" => Page::Videos,
             _ => Page::Media,
         };
         choose(&ui, page);

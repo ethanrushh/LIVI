@@ -17,6 +17,7 @@ pub struct UrlPlayer {
     heard: Arc<Mutex<Heard>>,
     view: crate::WindowView,
     say: Say,
+    local_file: bool,
 }
 
 #[derive(Default)]
@@ -64,6 +65,7 @@ impl Hold {
 impl UrlPlayer {
     pub fn new(url: &str, audio_device: &str, window: usize, say: Say) -> Option<Self> {
         crate::ensure_init();
+        let local_file = url.starts_with("file://");
         prefer_our_decoders();
         let playbin = gst::ElementFactory::make("playbin3")
             .property("uri", url)
@@ -89,13 +91,14 @@ impl UrlPlayer {
             }
             None
         });
-        watch_bus(&playbin, heard.clone(), say.clone());
+        watch_bus(&playbin, heard.clone(), say.clone(), local_file);
         say(&format!("[gst_video] playbin3 plays {url}"));
         Some(Self {
             playbin,
             heard,
             view,
             say,
+            local_file,
         })
     }
 
@@ -164,7 +167,7 @@ impl UrlPlayer {
                 return;
             }
         }
-        seek_to(&self.playbin, seconds, &self.say);
+        seek_to(&self.playbin, seconds, &self.say, self.local_file);
     }
 
     pub fn set_muted(&self, muted: bool) {
@@ -250,7 +253,7 @@ fn watch_decoder(element: &gst::Element, say: &Say) {
     }
 }
 
-fn watch_bus(playbin: &gst::Element, heard: Arc<Mutex<Heard>>, say: Say) {
+fn watch_bus(playbin: &gst::Element, heard: Arc<Mutex<Heard>>, say: Say, local_file: bool) {
     let Some(bus) = playbin.bus() else { return };
     let player = playbin.downgrade();
     let own_name = playbin.name().to_string();
@@ -278,7 +281,7 @@ fn watch_bus(playbin: &gst::Element, heard: Arc<Mutex<Heard>>, say: Say) {
                         say(&format!(
                             "[gst_video] the stream is ready, seeking to {at:.3} s"
                         ));
-                        seek_to(p, at, &say);
+                        seek_to(p, at, &say, local_file);
                     });
                 }
             }
@@ -339,9 +342,14 @@ fn watch_bus(playbin: &gst::Element, heard: Arc<Mutex<Heard>>, say: Say) {
     });
 }
 
-fn seek_to(playbin: &gst::Element, seconds: f64, say: &Say) {
+fn seek_to(playbin: &gst::Element, seconds: f64, say: &Say, local_file: bool) {
     let to = gst::ClockTime::from_nseconds((seconds.max(0.0) * 1e9) as u64);
-    let flags = gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT;
+    let flags = gst::SeekFlags::FLUSH
+        | if local_file {
+            gst::SeekFlags::ACCURATE
+        } else {
+            gst::SeekFlags::KEY_UNIT
+        };
     if let Err(e) = playbin.seek_simple(flags, to) {
         say(&format!("[gst_video] seek to {seconds:.1} s failed: {e}"));
     }

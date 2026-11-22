@@ -4,8 +4,14 @@
 
 import { RoundButton } from "media_parts.slint";
 import { Progress } from "media.slint";
+import { RowButton } from "settings/actions.slint";
 
 export component VideoControls inherits Rectangle {
+    in property <string> title;
+    in property <bool> local;
+    in property <bool> has-next;
+    callback next();
+    callback restart();
     in property <bool> playing;
     in property <float> elapsed-ms;
     in property <float> total-ms;
@@ -72,6 +78,32 @@ export component VideoControls inherits Rectangle {
             icon-size: round(root.small * 0.46 / 1px) * 1px;
             icon: @image-url("icons/Close.svg");
             clicked => { root.close(); }
+        }
+
+        if root.local: HorizontalLayout {
+            x: root.margin + root.small + 16px;
+            y: root.margin;
+            width: max(0px, parent.width - 2 * root.margin - root.small - 16px);
+            height: root.small;
+            spacing: 12px;
+            Text {
+                text: root.title;
+                font-size: 18px;
+                color: #ffffff;
+                overflow: elide;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            RowButton {
+                text: "Start over";
+                enabled: root.shown && root.can-seek;
+                clicked => { root.wake(); root.restart(); }
+            }
+            RowButton {
+                text: "Next";
+                enabled: root.shown && root.has-next;
+                clicked => { root.wake(); root.next(); }
+            }
         }
 
         RoundButton {

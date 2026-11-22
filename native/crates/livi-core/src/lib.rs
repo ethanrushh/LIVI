@@ -23,6 +23,7 @@ mod gnss;
 mod helper;
 mod http;
 mod hub;
+mod local_video;
 mod mfi;
 mod projection;
 mod radio;
@@ -128,6 +129,7 @@ pub async fn run(
         sessions: Default::default(),
         now_playing: Default::default(),
         video_playback: None,
+        local_videos: Default::default(),
         telemetry: Default::default(),
         navigation: Default::default(),
         system: livi_core_proto::state::System {

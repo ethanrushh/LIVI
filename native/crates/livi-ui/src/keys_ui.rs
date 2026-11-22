@@ -17,8 +17,8 @@ use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
 use slint::{ComponentHandle, Model};
 
 use crate::{
-    AppWindow, DabState, DashState, Focus, FocusZone, MediaSource, Page, PhoneState, RowKind,
-    ScreenKind, SettingsState,
+    AppWindow, DabState, DashState, Focus, FocusZone, LocalVideosState, MediaSource, Page,
+    PhoneState, RowKind, ScreenKind, SettingsState,
 };
 
 const SEEK_STEP_MS: f32 = 15_000.0;
@@ -49,6 +49,11 @@ enum Target {
     Source(MediaSource),
     Favorite,
     Station(usize),
+    VideoSources,
+    VideoRefresh,
+    VideoBack,
+    VideoAutoNext,
+    VideoFile(usize),
 }
 
 thread_local! {
@@ -110,6 +115,19 @@ fn settings_targets(s: &SettingsState) -> Vec<Target> {
 fn targets(ui: &AppWindow) -> Vec<Target> {
     match ui.get_page() {
         Page::Settings => settings_targets(&ui.global::<SettingsState>()),
+        Page::Videos => {
+            let s = ui.global::<LocalVideosState>();
+            if s.get_active() {
+                return Vec::new();
+            }
+            let mut out = vec![Target::VideoSources, Target::VideoRefresh];
+            if s.get_can_back() {
+                out.push(Target::VideoBack);
+            }
+            out.push(Target::VideoAutoNext);
+            out.extend((0..s.get_entries().row_count()).map(Target::VideoFile));
+            out
+        }
         Page::Media => {
             let mut out = Vec::new();
             let d = ui.global::<DabState>();
@@ -211,6 +229,7 @@ fn settle_after_settings_move(ui: &AppWindow, opened: bool, from: i32) {
 fn activate(ui: &AppWindow, target: Target) {
     let s = ui.global::<SettingsState>();
     let d = ui.global::<DabState>();
+    let v = ui.global::<LocalVideosState>();
     let from = ui.global::<Focus>().get_main_index();
     match target {
         Target::Back => {
@@ -270,6 +289,11 @@ fn activate(ui: &AppWindow, target: Target) {
         Target::Source(MediaSource::Dab) => d.invoke_resume(),
         Target::Source(MediaSource::Fm) => d.invoke_resume_fm(),
         Target::Favorite => d.invoke_toggle_favorite(),
+        Target::VideoSources => v.invoke_sources(),
+        Target::VideoRefresh => v.invoke_refresh(),
+        Target::VideoBack => v.invoke_back(),
+        Target::VideoAutoNext => v.invoke_auto_next_changed(!v.get_auto_next()),
+        Target::VideoFile(i) => v.invoke_pick(i as i32),
         Target::Station(i) => {
             if let Some(st) = d.get_stations().row_data(i) {
                 d.invoke_pick(st.id);
@@ -453,6 +477,26 @@ pub fn key(ui: &AppWindow, client: &Client, code: &str, down: bool, repeat: bool
         return true;
     }
     let config = client.mirror().json["config"].clone();
+    if down && ui.get_page() == Page::Videos {
+        let v = ui.global::<LocalVideosState>();
+        if v.get_active() {
+            match livi_ui_model::keys::mirror_key(code, &config, v.get_controls_shown()) {
+                MirrorKey::Leave => v.invoke_close(),
+                MirrorKey::Show => {
+                    v.set_controls_shown(true);
+                    v.set_controls_idle(0);
+                }
+                MirrorKey::Pass => {
+                    if code == "Space" && !repeat {
+                        v.invoke_play_pause();
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+    }
     if down && crate::video_ui::mirror_on_screen(ui) {
         match livi_ui_model::keys::mirror_key(code, &config, ui.get_mirror_shown()) {
             MirrorKey::Leave => {
