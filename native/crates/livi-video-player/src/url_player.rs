@@ -70,6 +70,9 @@ impl UrlPlayer {
             .build()
             .inspect_err(|e| say(&format!("[gst_video] no playbin3: {e}")))
             .ok()?;
+        if let Some(bin) = playbin.downcast_ref::<gst::Bin>() {
+            crate::threads::automatic(bin, &say);
+        }
         playbin.set_property_from_str("flags", "video+audio+soft-volume+buffering");
         let video = video_sink(&say)?;
         let view = crate::WindowView::new();

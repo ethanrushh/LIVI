@@ -12,6 +12,7 @@ use std::sync::{Arc, Once};
 mod camera;
 #[cfg(in_process)]
 mod in_process_view;
+mod threads;
 mod url_player;
 #[cfg_attr(
     all(target_os = "macos", feature = "window-view"),
@@ -283,11 +284,11 @@ impl Player {
             player.set_gamma(1.0, 1.0, 1.0, 1.0, 1.0);
         }
 
+        threads::automatic(player.pipeline.upcast_ref(), &to_stderr());
         force_sinks_realtime(&player.pipeline);
         if let Some(dec) = player.pipeline.by_name("dec") {
             if cfg!(target_vendor = "apple") && decoder == "avdec_h265" {
                 dec.set_property_from_str("thread-type", "frame");
-                dec.set_property("max-threads", 1i32);
                 eprintln!(
                     "[gst_video] {decoder} thread-type={} max-threads={}",
                     dec.property_value("thread-type")

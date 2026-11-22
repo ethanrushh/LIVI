@@ -71,6 +71,17 @@ fn stream_rect(state: &LiviState) -> Option<Rect> {
         .toplevels
         .iter()
         .find(|t| t.kind == Kind::Video && t.tag == STREAM_TAG && t.visible)?;
+    let layers = state.video_order.iter().rev().filter_map(|&i| {
+        state
+            .toplevels
+            .get(i)
+            .map(|plane| (plane.tag.as_str(), plane.screen_idx, plane.visible))
+    });
+    if !projection_is_topmost(layers, t.screen_idx) {
+        // A movie's controls are transparent while hidden. Their wake-up tap
+        // belongs to the UI, not to the projection underneath the movie.
+        return None;
+    }
     let s = state.screens.get(t.screen_idx)?;
     let top = s.top_inset();
     let (ow, oh) = (f64::from(s.width), f64::from(s.height - top));
@@ -82,6 +93,15 @@ fn stream_rect(state: &LiviState) -> Option<Rect> {
         (f64::from(s.x), f64::from(top), ow, oh),
         cropped.then_some((t.vis_w, t.vis_h)),
     ))
+}
+
+fn projection_is_topmost<'a>(
+    mut layers: impl Iterator<Item = (&'a str, usize, bool)>,
+    screen: usize,
+) -> bool {
+    layers
+        .find(|&(_, index, visible)| visible && index == screen)
+        .is_some_and(|(tag, _, _)| tag == STREAM_TAG)
 }
 
 fn root_of(surface: &WlSurface) -> WlSurface {
@@ -287,6 +307,25 @@ pub fn flush(state: &mut LiviState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn taps_reach_the_ui_when_a_movie_or_mirror_covers_the_projection() {
+        for tag in ["video", "airplay", "camera"] {
+            let layers = [(tag, 0, true), (STREAM_TAG, 0, true)];
+            assert!(!projection_is_topmost(layers.into_iter(), 0));
+        }
+    }
+
+    #[test]
+    fn hidden_and_other_screen_planes_do_not_intercept_projection_touches() {
+        let layers = [
+            ("video", 1, true),
+            ("video", 0, false),
+            (STREAM_TAG, 0, true),
+        ];
+        assert!(projection_is_topmost(layers.into_iter(), 0));
+        assert!(!projection_is_topmost([("video", 0, false)].into_iter(), 0));
+    }
 
     #[test]
     fn the_stream_box_matches_the_picture_inside_its_bars() {

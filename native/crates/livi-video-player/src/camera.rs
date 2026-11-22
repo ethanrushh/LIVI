@@ -348,6 +348,7 @@ impl CameraPlayer {
         gst::Element::link_many([&src, shape.upcast_ref(), &sink])
             .inspect_err(|e| say(&format!("[camera] cannot link: {e}")))
             .ok()?;
+        crate::threads::automatic(pipeline.upcast_ref(), &say);
         crate::log_bus_messages(&pipeline);
         crate::force_sinks_realtime(&pipeline);
         for element in pipeline.iterate_recurse().into_iter().flatten() {
