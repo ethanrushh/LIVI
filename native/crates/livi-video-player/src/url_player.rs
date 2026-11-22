@@ -11,6 +11,9 @@ use livi_output_proto::{UrlStatus, VideoCodec};
 use crate::Say;
 
 const PICKED_RANK: i32 = 1024;
+// The Pi 5's tiled HEVC buffers can show stale frames in Wayland during local
+// playback. Convert to linear RGB before handing the frames to the compositor.
+const PI5_LOCAL_SINK: &str = "videoconvert n-threads=0 ! video/x-raw,format=BGRx ! waylandsink";
 
 pub struct UrlPlayer {
     playbin: gst::Element,
@@ -76,7 +79,7 @@ impl UrlPlayer {
             crate::threads::automatic(bin, &say);
         }
         playbin.set_property_from_str("flags", "video+audio+soft-volume+buffering");
-        let video = video_sink(&say)?;
+        let video = video_sink(&say, local_file)?;
         let view = crate::WindowView::new();
         view.attach(window, crate::RANK_URL, Some(&video));
         let heard = Arc::new(Mutex::new(Heard::default()));
@@ -210,7 +213,21 @@ fn prefer_our_decoders() {
     }
 }
 
-pub(crate) fn video_sink(say: &Say) -> Option<gst::Element> {
+fn pi5_hardware() -> bool {
+    cfg!(target_os = "linux")
+        && std::fs::read("/proc/device-tree/compatible")
+            .is_ok_and(|ids| ids.split(|&byte| byte == 0).any(|id| id == b"brcm,bcm2712"))
+}
+
+fn sink_description(override_sink: Option<&str>, pi5_local: bool) -> &str {
+    match override_sink {
+        Some(desc) => livi_video::codec::desktop_sink(Some(desc)),
+        None if pi5_local => PI5_LOCAL_SINK,
+        None => livi_video::codec::desktop_sink(None),
+    }
+}
+
+pub(crate) fn video_sink(say: &Say, local_file: bool) -> Option<gst::Element> {
     if cfg!(any(target_vendor = "apple", target_os = "android")) {
         return gst::ElementFactory::make("glimagesink")
             .build()
@@ -218,7 +235,10 @@ pub(crate) fn video_sink(say: &Say) -> Option<gst::Element> {
             .ok();
     }
     let chosen = livi_video::codec::sink_override();
-    let desc = livi_video::codec::desktop_sink(chosen.as_deref());
+    let desc = sink_description(chosen.as_deref(), local_file && pi5_hardware());
+    if desc == PI5_LOCAL_SINK {
+        say("[gst_video] using linear RGB output for Pi 5 local playback");
+    }
     gst::parse::bin_from_description(desc, true)
         .inspect_err(|e| say(&format!("[gst_video] no video sink {desc}: {e}")))
         .ok()
@@ -377,6 +397,13 @@ fn seekable(playbin: &gst::Element) -> Option<(f64, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pi5_local_playback_has_a_compatible_default_with_an_explicit_override() {
+        assert_eq!(sink_description(None, false), "waylandsink");
+        assert_eq!(sink_description(None, true), PI5_LOCAL_SINK);
+        assert_eq!(sink_description(Some("fakesink"), true), "fakesink");
+    }
 
     #[test]
     fn playback_waits_for_a_full_queue_and_only_while_the_phone_wants_it() {

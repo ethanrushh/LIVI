@@ -323,7 +323,7 @@ impl CameraPlayer {
     pub fn new(order: &CameraOrder, window: usize, say: Say) -> Option<Self> {
         crate::ensure_init();
         let (src, caps) = source(&order.device, &say)?;
-        let sink = crate::url_player::video_sink(&say)?;
+        let sink = crate::url_player::video_sink(&say, false)?;
         let turn = direction(order.rotation, order.mirror);
         let turned = turn == "identity" || turn_in_sink(&sink, turn);
         let head = intake(caps.as_ref(), &say);
