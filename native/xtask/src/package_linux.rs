@@ -71,6 +71,40 @@ fn sha256(path: &Path) -> Result<String, String> {
         .to_string())
 }
 
+fn bundle_matroska(gst: &Path) -> Result<(), String> {
+    const PLUGIN: &str = "libgstmatroska.so";
+    let plugins = gst.join("lib/gstreamer-1.0");
+    let dest = plugins.join(PLUGIN);
+    // Older pinned bundles predate local MKV playback. Stage the native plugin
+    // from the build host's GStreamer Good package until those bundles rotate.
+    if !dest.is_file() {
+        let dir =
+            read(Command::new("pkg-config").args(["--variable=pluginsdir", "gstreamer-1.0"]))?;
+        let src = Path::new(dir.trim()).join(PLUGIN);
+        copy(&src, &dest)
+            .map_err(|e| format!("Install GStreamer Good plugins on the build host: {e}"))?;
+    }
+    let registry = gst.join(".matroska-check-registry.bin");
+    let libs = std::env::join_paths([gst.join("lib/libva-compat"), gst.join("lib")])
+        .map_err(|e| e.to_string())?;
+    let inspect = read(
+        Command::new(gst.join("bin/gst-inspect-1.0"))
+            .env("LD_LIBRARY_PATH", libs)
+            .env("GST_PLUGIN_SYSTEM_PATH_1_0", "")
+            .env("GST_PLUGIN_PATH_1_0", plugins)
+            .env(
+                "GST_PLUGIN_SCANNER",
+                gst.join("libexec/gstreamer-1.0/gst-plugin-scanner"),
+            )
+            .env("GST_REGISTRY", &registry)
+            .arg("matroskademux"),
+    );
+    let _ = fs::remove_file(registry);
+    inspect
+        .map(|_| ())
+        .map_err(|e| format!("Bundled Matroska demuxer did not load: {e}"))
+}
+
 fn appimagetool() -> Result<PathBuf, String> {
     if let Ok(tool) = std::env::var("APPIMAGETOOL") {
         return Ok(tool.into());
@@ -179,7 +213,9 @@ pub fn run(arch: Arch) -> Result<(), String> {
             || p.strip_prefix(&gst_src)
                 .is_ok_and(|r| r.starts_with("share"))
     };
-    copy_tree(&gst_src, &res.join(&gst_dir), &skip)?;
+    let staged_gst = res.join(&gst_dir);
+    copy_tree(&gst_src, &staged_gst, &skip)?;
+    bundle_matroska(&staged_gst)?;
 
     write_exe(&app.join("LIVI"), START)?;
     std::os::unix::fs::symlink("LIVI", app.join("AppRun")).map_err(|e| e.to_string())?;

@@ -327,6 +327,7 @@ Make sure the following packages and tools are installed on your system before b
 - **Rust** (via [rustup](https://rustup.rs), the latest stable release, `rustup update stable` keeps it current): builds everything, the UI included.
 - **build-essential** (Linux: includes `gcc`, `g++`, `make`, etc.)
 - **libgstreamer1.0-dev** + **libgstreamer-plugins-base1.0-dev** (required to build the `livi-output` binary)
+- **gstreamer1.0-plugins-good** (provides the Matroska demuxer when packaging a Linux AppImage)
 - **libssl-dev** (Linux only: native CarPlay links OpenSSL)
 - **pkg-config**, **cmake** (AWS-LC build), **libwayland-dev** + **libxkbcommon-dev** (Linux only: the embedded Wayland compositor links both)
 - **libfontconfig1-dev** (Linux only: the UI looks up fonts through fontconfig)
@@ -339,7 +340,7 @@ On Debian/Ubuntu/Raspberry Pi OS, install everything with:
 sudo apt-get update
 sudo apt-get install -y git build-essential \
   pkg-config cmake libssl-dev \
-  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-good \
   libwayland-dev libxkbcommon-dev libfontconfig1-dev \
   libudev-dev libinput-dev libseat-dev libgbm-dev \
   fuse3 bluez libspa-0.2-bluetooth hostapd dnsmasq-base iw rfkill avahi-daemon avahi-utils \
@@ -355,7 +356,7 @@ On Fedora, install everything with:
 ```bash
 sudo dnf install -y git gcc gcc-c++ make \
   pkgconf-pkg-config systemd-devel cmake openssl-devel \
-  gstreamer1-devel gstreamer1-plugins-base-devel \
+  gstreamer1-devel gstreamer1-plugins-base-devel gstreamer1-plugins-good \
   wayland-devel libxkbcommon-devel fontconfig-devel \
   libinput-devel libseat-devel mesa-libgbm-devel \
   fuse3 fuse3-libs \

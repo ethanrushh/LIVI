@@ -20,7 +20,7 @@ pub fn is_video(path: &Path) -> bool {
         // These containers have demuxers in the Linux AppImage.
         matches!(
             e.to_ascii_lowercase().as_str(),
-            "mp4" | "m4v" | "mov" | "ts" | "m2ts" | "mts"
+            "mp4" | "m4v" | "mov" | "mkv" | "ts" | "m2ts" | "mts"
         )
     })
 }
@@ -264,7 +264,7 @@ mod tests {
         std::fs::create_dir(dir.0.join("album")).unwrap();
         for file in [
             "track 10.MP4",
-            "track 2.mov",
+            "track 2.MKV",
             "track 01.mp4",
             "notes.txt",
             ".hidden.mp4",
@@ -274,7 +274,7 @@ mod tests {
         let entries = listing(&dir.0).unwrap();
         assert_eq!(
             entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
-            ["album", "track 01.mp4", "track 2.mov", "track 10.MP4"]
+            ["album", "track 01.mp4", "track 2.MKV", "track 10.MP4"]
         );
         let nested = dir.0.join("album/further");
         std::fs::create_dir(&nested).unwrap();
