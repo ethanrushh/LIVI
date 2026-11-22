@@ -259,21 +259,10 @@ impl Upstream {
         }
         let source = self.source(path);
         let mut out = String::with_capacity(text.len());
-        let mut session_data = String::new();
         for line in without_blocking_reload(&text).lines() {
-            // GStreamer's HLS typefinder scans only the first 4 KiB for stream
-            // tags. Apple's large, leading session metadata can hide them and
-            // make a valid playlist look like plain text. Session data applies
-            // to the whole master playlist, so keep it after the stream tags.
-            let target = if line.starts_with("#EXT-X-SESSION-DATA:") {
-                &mut session_data
-            } else {
-                &mut out
-            };
-            target.push_str(&with_local_uri(line, |uri| self.local(&source, uri)));
-            target.push('\n');
+            out.push_str(&with_local_uri(line, |uri| self.local(&source, uri)));
+            out.push('\n');
         }
-        out.push_str(&session_data);
         out.into_bytes()
     }
 
@@ -925,29 +914,6 @@ mod tests {
             started_over: mpsc::unbounded_channel().0,
             next_parts: std::sync::Mutex::default(),
         }
-    }
-
-    #[test]
-    fn large_session_metadata_does_not_hide_the_hls_stream_tags() {
-        let up = upstream("https://cdn.example");
-        let metadata = format!(
-            "#EXT-X-SESSION-DATA:DATA-ID=\"title\",VALUE=\"{}\"\n\
-             #EXT-X-SESSION-DATA:DATA-ID=\"artwork\",URI=\"https://art.example/image.json\"\n",
-            "x".repeat(8192)
-        );
-        let streams = "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",URI=\"/audio.m3u8\"\n\
-            #EXT-X-STREAM-INF:BANDWIDTH=1000000,AUDIO=\"audio\"\nvideo.m3u8\n";
-        let header = "#EXTM3U\n#EXT-X-VERSION:7\n";
-        let list = format!("{header}{metadata}{streams}");
-        assert!(list.find("#EXT-X-MEDIA:").unwrap() > 4096);
-
-        let out = String::from_utf8(up.answer("/master.m3u8", list.into_bytes())).unwrap();
-        assert!(out.starts_with(&format!("{header}{streams}")));
-        assert!(out.find("#EXT-X-MEDIA:").unwrap() < 4096);
-        assert!(out.ends_with(&metadata.replace(
-            "https://art.example/image.json",
-            "/~/https/art.example/image.json"
-        )));
     }
 
     #[test]

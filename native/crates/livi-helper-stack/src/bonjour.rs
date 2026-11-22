@@ -24,9 +24,7 @@ pub const AIRPLAY_SERVICE: &str = "_airplay._tcp";
 const CARPLAY_CTRL: &str = "_carplay-ctrl._tcp";
 
 #[cfg(not(target_vendor = "apple"))]
-mod publisher;
-#[cfg(not(target_vendor = "apple"))]
-use publisher::Publisher;
+type Publisher = tokio::process::Child;
 #[cfg(target_vendor = "apple")]
 type Publisher = crate::dnssd::Registration;
 
@@ -117,7 +115,14 @@ fn spawn(name: &str, port: u16, txt: &[String]) -> std::io::Result<Publisher> {
 
 #[cfg(not(target_vendor = "apple"))]
 fn spawn(name: &str, port: u16, txt: &[String]) -> std::io::Result<Publisher> {
-    publisher::spawn(name, port, txt)
+    let port = port.to_string();
+    let mut args = vec![name, AIRPLAY_SERVICE, port.as_str()];
+    args.extend(txt.iter().map(String::as_str));
+    Command::new(livi_base::sys::tool("avahi-publish-service"))
+        .args(&args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
 }
 
 #[cfg(target_vendor = "apple")]
@@ -149,11 +154,11 @@ impl Bonjour {
             pi,
         };
         let publisher = publish(&record, &device_id)?;
-        println!("[cp] publishing {AIRPLAY_SERVICE} port={airplay_port} deviceid={device_id}");
+        println!("[cp] published {AIRPLAY_SERVICE} port={airplay_port} deviceid={device_id}");
         let mirror = mirror.and_then(|m| match spawn(&m.name, m.port, &m.txt) {
             Ok(child) => {
                 println!(
-                    "[airplay] publishing {AIRPLAY_SERVICE} {:?} port={}",
+                    "[airplay] published {AIRPLAY_SERVICE} {:?} port={}",
                     m.name, m.port
                 );
                 Some(child)
