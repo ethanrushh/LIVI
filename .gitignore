@@ -62,6 +62,7 @@ Thumbs.db
 !/assets/gstreamer/*/version.txt
 !/assets/gstreamer/*/packages.txt
 !/assets/gstreamer/*/sha256.txt
+!/assets/gstreamer/*/repository.txt
 
 # LIVI Link dongle stack — firmware fetched from the assets release
 assets/livi-link/*/*.gz

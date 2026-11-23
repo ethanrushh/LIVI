@@ -1,0 +1,15 @@
+Description: h265decoder: reset random access state after flush
+ A flushing seek clears the decoded picture buffer. Treat the next
+ access unit as the start of a bitstream so a CRA picture suppresses
+ RASL pictures whose references precede the seek.
+---
+--- a/gst-libs/gst/codecs/gsth265decoder.c
++++ b/gst-libs/gst/codecs/gsth265decoder.c
+@@ -1340,6 +1340,7 @@
+   GstH265Decoder *self = GST_H265_DECODER (decoder);
+
+   gst_h265_decoder_clear_dpb (self, TRUE);
++  self->priv->new_bitstream = TRUE;
+
+   return TRUE;
+ }

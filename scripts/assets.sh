@@ -21,7 +21,7 @@ short() {
 }
 
 download() {
-  curl -fsSL --retry 3 --retry-all-errors -o "$2" "$URL/$1"
+  curl -fsSL --retry 3 --retry-all-errors -o "$2" "${4:-$URL}/$1"
   [ "$(sha "$2")" = "$3" ] || { echo "$1: checksum mismatch" >&2; rm -f "$2"; exit 1; }
 }
 
@@ -53,9 +53,13 @@ fetch_gstreamer() {
   dir=$ROOT/assets/gstreamer/$1
   want=$(cat "$dir/sha256.txt")
   [ "$(cat "$dir/.fetched" 2>/dev/null || true)" = "$want" ] && return
+  base=$URL
+  if [ -z "${LIVI_ASSETS_URL:-}" ] && [ -f "$dir/repository.txt" ]; then
+    base="https://github.com/$(cat "$dir/repository.txt")/releases/download/$TAG"
+  fi
   tmp=$(mktemp)
-  download "$(gst_asset "$1" "$want")" "$tmp" "$want"
-  find "$dir" -mindepth 1 -maxdepth 1 ! -name sha256.txt -exec rm -rf {} +
+  download "$(gst_asset "$1" "$want")" "$tmp" "$want" "$base"
+  find "$dir" -mindepth 1 -maxdepth 1 ! -name sha256.txt ! -name repository.txt -exec rm -rf {} +
   tar -xzf "$tmp" -C "$ROOT/assets/gstreamer"
   rm -f "$tmp"
   echo "$want" > "$dir/.fetched"
