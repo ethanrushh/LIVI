@@ -1,0 +1,17 @@
+[Unit]
+Description=CarPiHAT Pro 5 integration for LIVI
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/home/pi/.dotnet/dotnet /opt/carpihat-pro5/CarPiHat.dll /etc/carpihat-pro5.json
+Restart=on-failure
+RestartSec=2s
+RestartPreventExitStatus=2
+TimeoutStopSec=8s
+
+[Install]
+WantedBy=multi-user.target

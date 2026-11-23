@@ -1,0 +1,10 @@
+{
+  "ShutdownDelaySeconds": 40,
+  "ShutdownEnabled": false,
+  "CanInterface": "can0",
+  "Brightness": "Auto",
+  "BacklightDevice": "10-0045",
+  "BrightnessHighPercent": 100,
+  "BrightnessLowPercent": 12,
+  "WheelVolumeStepPercent": 4
+}
